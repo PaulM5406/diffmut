@@ -61,7 +61,7 @@ runs:
 
     - name: Install diffmut
       shell: bash
-      run: npm install -g @PaulM5406/diffmut --registry=https://npm.pkg.github.com
+      run: npm install -g @paulm5406/diffmut --registry=https://npm.pkg.github.com
 
     - name: Auto-detect diff base
       id: detect-base

@@ -9,7 +9,7 @@ LLM-powered mutation testing for your pull requests.
 ## Installation
 
 ```bash
-npm install -g @PaulM5406/diffmut --registry=https://npm.pkg.github.com
+npm install -g @paulm5406/diffmut --registry=https://npm.pkg.github.com
 ```
 
 ## Quick Start
