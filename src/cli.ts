@@ -6,13 +6,14 @@ import { runPipeline } from './pipeline/orchestrator.js';
 import { createReporter } from './reporter/reporter.js';
 import { logger } from './utils/logger.js';
 import { isInsideGitRepo } from './utils/git.js';
+import { PreflightError } from './runner/preflight.js';
 
 const program = new Command();
 
 program
   .name('diffmut')
   .description('LLM-powered mutation testing')
-  .version('0.0.2');
+  .version('0.0.3');
 
 program
   .command('run')
@@ -51,7 +52,12 @@ program
         process.exit(2);
       }
     } catch (err) {
-      if (err instanceof Error) {
+      if (err instanceof PreflightError) {
+        logger.error(err.message);
+        if (err.testOutput.trim()) {
+          logger.error(err.testOutput);
+        }
+      } else if (err instanceof Error) {
         logger.error(err.message);
       } else {
         logger.error(String(err));

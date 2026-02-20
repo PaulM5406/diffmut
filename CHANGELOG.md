@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.0.3] - 2026-02-21
+
+### Fixed
+
+- Show test output on pre-flight failure for easier debugging
+
 ## [v0.0.2] - 2026-02-21
 
 ### Fixed
