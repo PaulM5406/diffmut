@@ -1,0 +1,121 @@
+name: 'DiffMut'
+description: 'LLM-powered mutation testing for pull requests'
+branding:
+  icon: 'zap'
+  color: 'purple'
+
+inputs:
+  test-command:
+    description: 'Shell command to run tests'
+    required: true
+  diff-base:
+    description: 'Git ref to diff against (auto-detected from PR base if omitted)'
+    required: false
+  mutations:
+    description: 'Number of mutations per changed file'
+    required: false
+    default: '5'
+  model:
+    description: 'LLM model to use'
+    required: false
+    default: 'gpt-4o'
+  provider:
+    description: 'Provider: openai | anthropic (auto-detected from model if omitted)'
+    required: false
+  timeout:
+    description: 'Max time per test run in seconds'
+    required: false
+    default: '300'
+  include:
+    description: 'Glob patterns to include (space-separated)'
+    required: false
+  exclude:
+    description: 'Glob patterns to exclude (space-separated)'
+    required: false
+  fail-on-survived:
+    description: 'Fail the action if any mutation survives'
+    required: false
+    default: 'false'
+  openai-api-key:
+    description: 'OpenAI API key (required for OpenAI provider)'
+    required: false
+  anthropic-api-key:
+    description: 'Anthropic API key (required for Anthropic provider)'
+    required: false
+
+outputs:
+  mutation-score:
+    description: 'The mutation score as a percentage'
+    value: ${{ steps.diffmut.outputs.score }}
+  report:
+    description: 'The full report in markdown format'
+    value: ${{ steps.diffmut.outputs.report }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install diffmut
+      shell: bash
+      run: npm install -g @PaulM5406/diffmut --registry=https://npm.pkg.github.com
+
+    - name: Auto-detect diff base
+      id: detect-base
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.diff-base }}" ]; then
+          echo "base=${{ inputs.diff-base }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run diffmut
+      id: diffmut
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        ARGS="--test-command '${{ inputs.test-command }}'"
+        ARGS="$ARGS --diff-base ${{ steps.detect-base.outputs.base }}"
+        ARGS="$ARGS --mutations ${{ inputs.mutations }}"
+        ARGS="$ARGS --model ${{ inputs.model }}"
+        ARGS="$ARGS --timeout ${{ inputs.timeout }}"
+        ARGS="$ARGS --output github"
+
+        if [ -n "${{ inputs.provider }}" ]; then
+          ARGS="$ARGS --provider ${{ inputs.provider }}"
+        fi
+
+        if [ "${{ inputs.fail-on-survived }}" = "true" ]; then
+          ARGS="$ARGS --fail-on-survived"
+        fi
+
+        if [ -n "${{ inputs.include }}" ]; then
+          ARGS="$ARGS --include ${{ inputs.include }}"
+        fi
+
+        if [ -n "${{ inputs.exclude }}" ]; then
+          ARGS="$ARGS --exclude ${{ inputs.exclude }}"
+        fi
+
+        EXIT_CODE=0
+        REPORT=$(eval diffmut run $ARGS 2>/dev/null) || EXIT_CODE=$?
+
+        # Extract score from JSON if possible, fallback to report parsing
+        echo "report<<DIFFMUT_EOF" >> "$GITHUB_OUTPUT"
+        echo "$REPORT" >> "$GITHUB_OUTPUT"
+        echo "DIFFMUT_EOF" >> "$GITHUB_OUTPUT"
+
+        exit $EXIT_CODE
+
+    - name: Post or update PR comment
+      if: always() && github.event_name == 'pull_request'
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: diffmut-report
+        message: ${{ steps.diffmut.outputs.report }}

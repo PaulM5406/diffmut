@@ -1,0 +1,55 @@
+{
+  "name": "@PaulM5406/diffmut",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PaulM5406/diffmut.git"
+  },
+  "version": "0.1.0",
+  "description": "LLM-powered mutation testing for your pull requests",
+  "type": "module",
+  "bin": {
+    "diffmut": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mutation-testing",
+    "llm",
+    "openai",
+    "testing",
+    "code-quality"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "commander": "^13.1.0",
+    "minimatch": "^10.0.1",
+    "openai": "^4.80.0",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.1",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.0",
+    "vitest": "^3.0.0"
+  }
+}
