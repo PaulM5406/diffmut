@@ -12,7 +12,7 @@ const program = new Command();
 program
   .name('diffmut')
   .description('LLM-powered mutation testing')
-  .version('0.1.0');
+  .version('0.0.1');
 
 program
   .command('run')
