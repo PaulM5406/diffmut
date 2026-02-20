@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/PaulM5406/diffmut.git"
   },
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "LLM-powered mutation testing for your pull requests",
   "type": "module",
   "bin": {

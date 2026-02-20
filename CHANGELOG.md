@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.0.2] - 2026-02-21
+
+### Fixed
+
+- Git commands failing in Docker/CI containers due to filesystem mount boundaries
+- Potential "dubious ownership" errors when repo owner differs from container user
+
 ## [v0.0.1] - 2026-02-20
 
 ### Added
