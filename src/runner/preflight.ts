@@ -23,7 +23,7 @@ export async function runPreflight(
     );
   }
 
-  if (!result.passed) {
+  if (!result.passed && result.exitCode !== 5) {
     throw new PreflightError(
       'Pre-flight test run failed. Tests must pass on unmodified code before mutation testing.',
       result.stdout + '\n' + result.stderr,

@@ -7,6 +7,7 @@ function makePipelineResult(overrides: Partial<PipelineResult> = {}): PipelineRe
     totalMutations: 3,
     killed: 2,
     survived: 1,
+    noCoverage: 0,
     timedOut: 0,
     errors: 0,
     mutationScore: 66.7,

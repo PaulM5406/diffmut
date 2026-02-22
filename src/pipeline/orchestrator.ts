@@ -35,6 +35,7 @@ function emptyResult(startTime: number): PipelineResult {
     totalMutations: 0,
     killed: 0,
     survived: 0,
+    noCoverage: 0,
     timedOut: 0,
     errors: 0,
     mutationScore: 100,
@@ -68,6 +69,7 @@ function aggregateResults(
 ): PipelineResult {
   let killed = 0;
   let survived = 0;
+  let noCoverage = 0;
   let timedOut = 0;
   let errors = 0;
   let totalTokenUsage = emptyTokenUsage();
@@ -82,6 +84,9 @@ function aggregateResults(
         case 'survived':
           survived++;
           break;
+        case 'no_coverage':
+          noCoverage++;
+          break;
         case 'timeout':
           timedOut++;
           break;
@@ -92,14 +97,15 @@ function aggregateResults(
     }
   }
 
-  const totalMutations = killed + survived + timedOut + errors;
-  const denominator = killed + survived;
+  const totalMutations = killed + survived + noCoverage + timedOut + errors;
+  const denominator = killed + survived + noCoverage;
   const mutationScore = denominator > 0 ? (killed / denominator) * 100 : 100;
 
   return {
     totalMutations,
     killed,
     survived,
+    noCoverage,
     timedOut,
     errors,
     mutationScore,
@@ -192,6 +198,7 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
 
           let outcome: MutationOutcome;
           if (testResult.timedOut) outcome = 'timeout';
+          else if (testResult.exitCode === 5) outcome = 'no_coverage';
           else if (testResult.passed) outcome = 'survived';
           else outcome = 'killed';
 

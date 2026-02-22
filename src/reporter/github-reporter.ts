@@ -9,6 +9,8 @@ function outcomeIcon(outcome: string): string {
       return ':warning:';
     case 'timeout':
       return ':hourglass:';
+    case 'no_coverage':
+      return ':see_no_evil:';
     case 'error':
       return ':x:';
     default:
@@ -39,7 +41,7 @@ export class GithubReporter implements Reporter {
         const file = `\`${r.mutation.filePath}:${r.mutation.startLine}\``;
         lines.push(`| ${icon} | ${file} | ${r.mutation.description} | ${r.mutation.category} |`);
 
-        if (r.outcome === 'survived') {
+        if (r.outcome === 'survived' || r.outcome === 'no_coverage') {
           survived.push(r);
         }
       }
@@ -49,7 +51,7 @@ export class GithubReporter implements Reporter {
     if (survived.length > 0) {
       lines.push('');
       lines.push('<details>');
-      lines.push(`<summary>Survived mutations (${survived.length})</summary>`);
+      lines.push(`<summary>Uncaught mutations (${survived.length})</summary>`);
       lines.push('');
 
       for (const r of survived) {

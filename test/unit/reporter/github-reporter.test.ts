@@ -8,6 +8,7 @@ describe('GithubReporter', () => {
       totalMutations: 2,
       killed: 1,
       survived: 1,
+      noCoverage: 0,
       timedOut: 0,
       errors: 0,
       mutationScore: 50,
@@ -58,7 +59,7 @@ describe('GithubReporter', () => {
     expect(output).toContain('50.0%');
     expect(output).toContain(':white_check_mark:');
     expect(output).toContain(':warning:');
-    expect(output).toContain('Survived mutations (1)');
+    expect(output).toContain('Uncaught mutations (1)');
     expect(output).toContain('```diff');
     expect(output).toContain('- x > 0');
     expect(output).toContain('+ x >= 0');
@@ -69,6 +70,7 @@ describe('GithubReporter', () => {
       totalMutations: 1,
       killed: 1,
       survived: 0,
+      noCoverage: 0,
       timedOut: 0,
       errors: 0,
       mutationScore: 100,
@@ -101,6 +103,6 @@ describe('GithubReporter', () => {
     const reporter = new GithubReporter();
     const output = reporter.report(result);
 
-    expect(output).not.toContain('Survived mutations');
+    expect(output).not.toContain('Uncaught mutations');
   });
 });

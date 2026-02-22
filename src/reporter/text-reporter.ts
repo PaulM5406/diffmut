@@ -10,6 +10,8 @@ function outcomeLabel(outcome: string): string {
       return pc.red('[SURVIVED] ');
     case 'timeout':
       return pc.yellow('[TIMEOUT]  ');
+    case 'no_coverage':
+      return pc.yellow('[NO COVER] ');
     case 'error':
       return pc.dim('[ERROR]    ');
     default:

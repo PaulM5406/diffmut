@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.0.4] - 2026-02-22
+
+### Added
+
+- `no_coverage` mutation outcome when no tests are collected (exit code 5)
+- Show test output on pre-flight failure for easier debugging
+
+### Fixed
+
+- Pre-flight no longer fails when test command collects zero tests (e.g. `pytest --diff` with no changes)
+
 ## [v0.0.3] - 2026-02-21
 
 ### Fixed

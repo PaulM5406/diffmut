@@ -8,6 +8,7 @@ describe('JsonReporter', () => {
       totalMutations: 1,
       killed: 1,
       survived: 0,
+      noCoverage: 0,
       timedOut: 0,
       errors: 0,
       mutationScore: 100,

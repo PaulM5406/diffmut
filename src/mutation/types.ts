@@ -15,7 +15,7 @@ export interface MutationGenerationResult {
   retries: number;
 }
 
-export type MutationOutcome = 'killed' | 'survived' | 'timeout' | 'error';
+export type MutationOutcome = 'killed' | 'survived' | 'no_coverage' | 'timeout' | 'error';
 
 export interface MutationTestResult {
   mutation: Mutation;
@@ -34,6 +34,7 @@ export interface PipelineResult {
   totalMutations: number;
   killed: number;
   survived: number;
+  noCoverage: number;
   timedOut: number;
   errors: number;
   mutationScore: number;
