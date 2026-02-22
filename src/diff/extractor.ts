@@ -122,11 +122,17 @@ export function extractDiff(
       continue;
     }
 
+    const language = inferLanguage(parsed.filePath);
+
+    // Skip non-source files (config, lock files, etc.) unless explicitly included
+    if (language === 'unknown' && !(include && include.length > 0)) {
+      continue;
+    }
+
     const absPath = path.join(root, parsed.filePath);
     if (!fs.existsSync(absPath)) continue;
 
     const currentContent = fs.readFileSync(absPath, 'utf-8');
-    const language = inferLanguage(parsed.filePath);
 
     files.push({
       filePath: parsed.filePath,

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.0.5] - 2026-02-22
+
+### Changed
+
+- Renamed all "Mutagen" branding to "diffmut" in reports
+
+### Fixed
+
+- Non-source files (config, lock files, CI workflows) are no longer mutated unless explicitly included via `--include`
+
 ## [v0.0.4] - 2026-02-22
 
 ### Added

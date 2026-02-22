@@ -72,7 +72,7 @@ describe('TextReporter', () => {
     const reporter = new TextReporter();
     const output = reporter.report(makePipelineResult());
 
-    expect(output).toContain('Mutagen Report');
+    expect(output).toContain('diffmut Report');
     expect(output).toContain('66.7%');
     expect(output).toContain('2/3 killed');
     expect(output).toContain('src/test.ts');

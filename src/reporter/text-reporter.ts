@@ -24,7 +24,7 @@ export class TextReporter implements Reporter {
     const lines: string[] = [];
 
     lines.push('');
-    lines.push(pc.bold('Mutagen Report'));
+    lines.push(pc.bold('diffmut Report'));
     lines.push('═'.repeat(50));
 
     const scoreColor = result.mutationScore >= 80 ? pc.green : result.mutationScore >= 50 ? pc.yellow : pc.red;

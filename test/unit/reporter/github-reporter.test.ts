@@ -55,7 +55,7 @@ describe('GithubReporter', () => {
     const reporter = new GithubReporter();
     const output = reporter.report(result);
 
-    expect(output).toContain('## Mutagen Report');
+    expect(output).toContain('## diffmut Report');
     expect(output).toContain('50.0%');
     expect(output).toContain(':white_check_mark:');
     expect(output).toContain(':warning:');
