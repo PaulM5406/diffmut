@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const MutationItemSchema = z.object({
+  filePath: z.string().describe('Relative path of the file this mutation targets'),
   startLine: z.number().int().describe('Starting line number (1-based) of the code to replace'),
   endLine: z.number().int().describe('Ending line number (1-based, inclusive) of the code to replace'),
   originalCode: z.string().describe('The exact original code being replaced (for verification)'),

@@ -4,8 +4,8 @@ import type { ChangedFile } from '../diff/types.js';
 import { logger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
 import type { MutationProvider } from './provider.js';
-import { filterAndMapMutations, shouldRetryOnStatus } from './provider-utils.js';
-import { buildPrompt } from './prompt.js';
+import { filterAndMapMultiFileMutations, shouldRetryOnStatus } from './provider-utils.js';
+import { buildMultiFilePrompt } from './prompt.js';
 import { MutationResponseSchema, type MutationResponse } from './schemas.js';
 import type { MutationGenerationResult, TokenUsage } from './types.js';
 
@@ -42,10 +42,10 @@ export class AnthropicMutationProvider implements MutationProvider {
   }
 
   async generateMutations(
-    file: ChangedFile,
+    files: ChangedFile[],
     count: number,
   ): Promise<MutationGenerationResult> {
-    const messages = buildPrompt(file, count);
+    const messages = buildMultiFilePrompt(files, count);
     const systemContent = messages.find((m) => m.role === 'system')?.content ?? '';
     const userMessages = messages
       .filter((m) => m.role !== 'system')
@@ -59,7 +59,7 @@ export class AnthropicMutationProvider implements MutationProvider {
       async () => {
         return this.client.messages.create({
           model: this.model,
-          max_tokens: 4096,
+          max_tokens: 8192,
           system: systemContent,
           messages: userMessages,
           output_config: {
@@ -75,7 +75,8 @@ export class AnthropicMutationProvider implements MutationProvider {
 
     const parsed = parseJsonContent(response);
     if (!parsed) {
-      logger.warn(`Empty response from ${this.model} for ${file.filePath}`);
+      const filePaths = files.map((f) => f.filePath).join(', ');
+      logger.warn(`Empty response from ${this.model} for ${filePaths}`);
       return {
         mutations: [],
         tokenUsage: extractTokenUsage(response),
@@ -87,7 +88,7 @@ export class AnthropicMutationProvider implements MutationProvider {
     logger.addTokenUsage(tokenUsage);
 
     return {
-      mutations: filterAndMapMutations(parsed, file),
+      mutations: filterAndMapMultiFileMutations(parsed, files),
       tokenUsage,
       retries,
     };

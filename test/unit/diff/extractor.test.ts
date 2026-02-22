@@ -132,4 +132,99 @@ index abc..def 100644
     expect(result.files[0].hunks[0].lines[0].lineNumber).toBe(2);
     expect(result.files[0].hunks[1].lines[0].lineNumber).toBe(12);
   });
+
+  it('should exclude test files by default', () => {
+    vi.mocked(gitDiff).mockReturnValue(
+      `diff --git a/src/utils.ts b/src/utils.ts
+index abc..def 100644
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -1,3 +1,4 @@
+ line1
++new line
+ line2
+ line3
+diff --git a/src/utils.test.ts b/src/utils.test.ts
+index abc..def 100644
+--- a/src/utils.test.ts
++++ b/src/utils.test.ts
+@@ -1,2 +1,3 @@
+ line1
++new test line
+ line2
+diff --git a/test/unit/foo.test.ts b/test/unit/foo.test.ts
+index abc..def 100644
+--- a/test/unit/foo.test.ts
++++ b/test/unit/foo.test.ts
+@@ -1,2 +1,3 @@
+ line1
++another test line
+ line2
+`,
+    );
+
+    const result = extractDiff('origin/main');
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].filePath).toBe('src/utils.ts');
+  });
+
+  it('should include test files when excludeTests is false', () => {
+    vi.mocked(gitDiff).mockReturnValue(
+      `diff --git a/src/utils.ts b/src/utils.ts
+index abc..def 100644
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -1,3 +1,4 @@
+ line1
++new line
+ line2
+ line3
+diff --git a/src/utils.test.ts b/src/utils.test.ts
+index abc..def 100644
+--- a/src/utils.test.ts
++++ b/src/utils.test.ts
+@@ -1,2 +1,3 @@
+ line1
++new test line
+ line2
+`,
+    );
+
+    const result = extractDiff('origin/main', undefined, undefined, false);
+    expect(result.files).toHaveLength(2);
+  });
+
+  it('should exclude Python test files by default', () => {
+    vi.mocked(gitDiff).mockReturnValue(
+      `diff --git a/src/main.py b/src/main.py
+index abc..def 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -1,2 +1,3 @@
+ line1
++new line
+ line2
+diff --git a/test_main.py b/test_main.py
+index abc..def 100644
+--- a/test_main.py
++++ b/test_main.py
+@@ -1,2 +1,3 @@
+ line1
++test line
+ line2
+diff --git a/conftest.py b/conftest.py
+index abc..def 100644
+--- a/conftest.py
++++ b/conftest.py
+@@ -1,2 +1,3 @@
+ line1
++fixture
+ line2
+`,
+    );
+
+    const result = extractDiff('origin/main');
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0].filePath).toBe('src/main.py');
+  });
 });

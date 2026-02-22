@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnnotatedContent, buildPrompt } from '../../../src/mutation/prompt.js';
+import { buildAnnotatedContent, buildPrompt, buildMultiFilePrompt } from '../../../src/mutation/prompt.js';
 import type { ChangedFile } from '../../../src/diff/types.js';
 
 function makeFile(overrides: Partial<ChangedFile> = {}): ChangedFile {
@@ -78,5 +78,61 @@ describe('buildPrompt', () => {
     expect(messages[0].content).toContain('boundary-condition');
     expect(messages[0].content).toContain('logical-operator');
     expect(messages[0].content).toContain('null-safety');
+  });
+});
+
+describe('buildMultiFilePrompt', () => {
+  it('should return system and user messages', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0].role).toBe('system');
+    expect(messages[1].role).toBe('user');
+  });
+
+  it('should include file headers with path and language', () => {
+    const files = [
+      makeFile({ filePath: 'src/foo.ts', language: 'typescript' }),
+      makeFile({ filePath: 'src/bar.py', language: 'python' }),
+    ];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    expect(messages[1].content).toContain('=== File: src/foo.ts (typescript) ===');
+    expect(messages[1].content).toContain('=== File: src/bar.py (python) ===');
+  });
+
+  it('should include total mutation count in user message', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 10);
+
+    expect(messages[1].content).toContain('10 mutations');
+  });
+
+  it('should include annotated content for each file', () => {
+    const files = [
+      makeFile({ filePath: 'src/foo.ts' }),
+      makeFile({ filePath: 'src/bar.ts' }),
+    ];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    // Should contain annotated content (line numbers and markers)
+    expect(messages[1].content).toContain('[CHANGED]');
+    expect(messages[1].content).toContain('[CONTEXT]');
+  });
+
+  it('should instruct LLM to include filePath in each mutation', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    expect(messages[1].content).toContain('filePath');
+  });
+
+  it('should work with a single file', () => {
+    const files = [makeFile({ filePath: 'src/only.ts' })];
+    const messages = buildMultiFilePrompt(files, 3);
+
+    expect(messages[1].content).toContain('=== File: src/only.ts (typescript) ===');
+    expect(messages[1].content).toContain('3 mutations');
   });
 });

@@ -59,6 +59,7 @@ const baseConfig: MutantConfig = {
   model: 'gpt-4o',
   timeout: 60,
   output: 'text',
+  excludeTests: true,
   failOnSurvived: false,
   dryRun: false,
 };
@@ -74,6 +75,13 @@ describe('runPipeline', () => {
     const result = await runPipeline(baseConfig);
     expect(result.totalMutations).toBe(0);
     expect(result.mutationScore).toBe(100);
+  });
+
+  it('should pass excludeTests to extractDiff', async () => {
+    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files: [] });
+
+    await runPipeline(baseConfig);
+    expect(extractDiff).toHaveBeenCalledWith('origin/main', undefined, undefined, true);
   });
 
   it('should run preflight before testing mutations', async () => {
@@ -101,6 +109,41 @@ describe('runPipeline', () => {
 
     await runPipeline(baseConfig);
     expect(runPreflight).toHaveBeenCalledOnce();
+  });
+
+  it('should call generateMutations once with all files', async () => {
+    const files = [
+      {
+        filePath: 'src/foo.ts',
+        currentContent: 'line1\nline2',
+        hunks: [{ startLine: 2, lineCount: 1, lines: [{ lineNumber: 2, content: 'line2', type: 'added' }] }],
+        language: 'typescript',
+      },
+      {
+        filePath: 'src/bar.ts',
+        currentContent: 'line1\nline2',
+        hunks: [{ startLine: 2, lineCount: 1, lines: [{ lineNumber: 2, content: 'line2', type: 'added' }] }],
+        language: 'typescript',
+      },
+    ];
+
+    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files });
+
+    const mockProvider = {
+      name: 'openai',
+      generateMutations: vi.fn().mockResolvedValue({
+        mutations: [],
+        tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        retries: 0,
+      }),
+    };
+    vi.mocked(OpenAIMutationProvider).mockImplementation(() => mockProvider as any);
+
+    await runPipeline(baseConfig);
+
+    // Single call with all files, not one per file
+    expect(mockProvider.generateMutations).toHaveBeenCalledOnce();
+    expect(mockProvider.generateMutations).toHaveBeenCalledWith(files, 3);
   });
 
   it('should skip preflight in dry-run mode', async () => {
@@ -140,5 +183,48 @@ describe('runPipeline', () => {
     const result = await runPipeline({ ...baseConfig, dryRun: true });
     expect(runPreflight).not.toHaveBeenCalled();
     expect(result.totalMutations).toBe(1);
+  });
+
+  it('should truncate mutations to requested count', async () => {
+    vi.mocked(extractDiff).mockReturnValue({
+      baseRef: 'origin/main',
+      files: [
+        {
+          filePath: 'src/test.ts',
+          currentContent: 'line1\nline2\nline3',
+          hunks: [
+            {
+              startLine: 2,
+              lineCount: 2,
+              lines: [
+                { lineNumber: 2, content: 'line2', type: 'added' },
+                { lineNumber: 3, content: 'line3', type: 'added' },
+              ],
+            },
+          ],
+          language: 'typescript',
+        },
+      ],
+    });
+
+    const mockProvider = {
+      name: 'openai',
+      generateMutations: vi.fn().mockResolvedValue({
+        mutations: [
+          { id: 'mut-1', filePath: 'src/test.ts', startLine: 2, endLine: 2, originalCode: 'line2', mutatedCode: 'a', description: 'a', category: 'return-value' },
+          { id: 'mut-2', filePath: 'src/test.ts', startLine: 2, endLine: 2, originalCode: 'line2', mutatedCode: 'b', description: 'b', category: 'return-value' },
+          { id: 'mut-3', filePath: 'src/test.ts', startLine: 2, endLine: 2, originalCode: 'line2', mutatedCode: 'c', description: 'c', category: 'return-value' },
+          { id: 'mut-4', filePath: 'src/test.ts', startLine: 2, endLine: 2, originalCode: 'line2', mutatedCode: 'd', description: 'd', category: 'return-value' },
+          { id: 'mut-5', filePath: 'src/test.ts', startLine: 2, endLine: 2, originalCode: 'line2', mutatedCode: 'e', description: 'e', category: 'return-value' },
+        ],
+        tokenUsage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        retries: 0,
+      }),
+    };
+    vi.mocked(OpenAIMutationProvider).mockImplementation(() => mockProvider as any);
+
+    // Request only 3 mutations
+    const result = await runPipeline({ ...baseConfig, mutations: 3, dryRun: true });
+    expect(result.totalMutations).toBe(3);
   });
 });

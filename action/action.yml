@@ -12,7 +12,7 @@ inputs:
     description: 'Git ref to diff against (auto-detected from PR base if omitted)'
     required: false
   mutations:
-    description: 'Number of mutations per changed file'
+    description: 'Total number of mutations for the PR'
     required: false
     default: '5'
   model:

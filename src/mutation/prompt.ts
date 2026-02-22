@@ -36,7 +36,8 @@ Rules:
 6. Prefer diverse mutation categories — do not generate multiple mutations of the same category
 7. Consider the SEMANTICS of the code, not just syntactic transformations
 8. When mutating Python code, consider Pythonic patterns like list comprehensions, context managers, and truthiness
-9. When mutating TypeScript/JavaScript, consider type narrowing, optional chaining, and nullish coalescing`;
+9. When mutating TypeScript/JavaScript, consider type narrowing, optional chaining, and nullish coalescing
+10. Distribute mutations intelligently across files based on complexity and risk. Each mutation must include the filePath.`;
 
 const MAX_ANNOTATED_LINES = 500;
 const CONTEXT_LINES_AROUND_HUNK = 30;
@@ -122,6 +123,34 @@ ${annotated}
 \`\`\`
 
 Generate exactly ${count} mutations for the [CHANGED] lines in this file.`,
+    },
+  ];
+}
+
+export function buildMultiFilePrompt(
+  files: ChangedFile[],
+  totalCount: number,
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const fileSections = files
+    .map((file) => {
+      const annotated = buildAnnotatedContent(file);
+      return `=== File: ${file.filePath} (${file.language}) ===
+
+\`\`\`${file.language}
+${annotated}
+\`\`\``;
+    })
+    .join('\n\n');
+
+  return [
+    { role: 'system', content: SYSTEM_PROMPT },
+    {
+      role: 'user',
+      content: `Below are all changed files in this PR. Lines prefixed with [CHANGED] are within the git diff and are eligible for mutation. Lines prefixed with [CONTEXT] provide surrounding context but must NOT be mutated.
+
+${fileSections}
+
+Generate exactly ${totalCount} mutations across all files above. Distribute mutations intelligently based on complexity and risk. Each mutation must include the filePath field matching one of the file paths above.`,
     },
   ];
 }

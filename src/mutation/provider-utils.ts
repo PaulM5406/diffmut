@@ -48,6 +48,44 @@ export function filterAndMapMutations(
   return validMutations;
 }
 
+function normalizePath(p: string): string {
+  return p.replace(/^\.\//, '').trim();
+}
+
+export function filterAndMapMultiFileMutations(
+  parsed: MutationResponse,
+  files: ChangedFile[],
+): Mutation[] {
+  const fileMap = new Map<string, ChangedFile>();
+  for (const file of files) {
+    fileMap.set(normalizePath(file.filePath), file);
+  }
+
+  const validMutations: Mutation[] = [];
+  for (const m of parsed.mutations) {
+    const normalizedPath = normalizePath(m.filePath);
+    const file = fileMap.get(normalizedPath);
+    if (!file) {
+      logger.debug(`Filtered mutation with unknown filePath: ${m.filePath}`);
+      continue;
+    }
+    if (!isWithinDiffBounds(m, file)) {
+      logger.debug(`Filtered mutation outside diff bounds: ${m.filePath} lines ${m.startLine}-${m.endLine}`);
+      continue;
+    }
+    if (m.originalCode === m.mutatedCode) {
+      logger.debug(`Filtered equivalent mutation at ${m.filePath}:${m.startLine}`);
+      continue;
+    }
+    validMutations.push({
+      ...m,
+      id: generateMutationId(file.filePath),
+      filePath: file.filePath,
+    });
+  }
+  return validMutations;
+}
+
 export function shouldRetryOnStatus(err: unknown): boolean {
   if (err && typeof err === 'object' && 'status' in err) {
     const status = (err as { status: number }).status;

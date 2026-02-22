@@ -14,6 +14,7 @@ interface CLIOptions {
   output?: string;
   include?: string[];
   exclude?: string[];
+  excludeTests?: boolean;
   failOnSurvived?: boolean;
   dryRun?: boolean;
   config?: string;
@@ -63,6 +64,7 @@ export async function loadConfig(cliOpts: CLIOptions): Promise<MutantConfig> {
     ...(cliOpts.output !== undefined && { output: cliOpts.output }),
     ...(cliOpts.include !== undefined && { include: cliOpts.include }),
     ...(cliOpts.exclude !== undefined && { exclude: cliOpts.exclude }),
+    ...(cliOpts.excludeTests !== undefined && { excludeTests: cliOpts.excludeTests }),
     ...(cliOpts.failOnSurvived !== undefined && { failOnSurvived: cliOpts.failOnSurvived }),
     ...(cliOpts.dryRun !== undefined && { dryRun: cliOpts.dryRun }),
   };

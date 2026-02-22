@@ -22,13 +22,6 @@ function emptyTokenUsage(): TokenUsage {
   return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 }
 
-function addTokenUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
-  return {
-    promptTokens: a.promptTokens + b.promptTokens,
-    completionTokens: a.completionTokens + b.completionTokens,
-    totalTokens: a.totalTokens + b.totalTokens,
-  };
-}
 
 function emptyResult(startTime: number): PipelineResult {
   return {
@@ -65,6 +58,7 @@ function applyMutationToContent(content: string, mutation: Mutation): string {
 
 function aggregateResults(
   fileResults: FileResult[],
+  totalTokenUsage: TokenUsage,
   startTime: number,
 ): PipelineResult {
   let killed = 0;
@@ -72,10 +66,8 @@ function aggregateResults(
   let noCoverage = 0;
   let timedOut = 0;
   let errors = 0;
-  let totalTokenUsage = emptyTokenUsage();
 
   for (const fr of fileResults) {
-    totalTokenUsage = addTokenUsage(totalTokenUsage, fr.tokenUsage);
     for (const r of fr.results) {
       switch (r.outcome) {
         case 'killed':
@@ -123,7 +115,7 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
   try {
     // Step 1: Extract diff
     logger.info(`Extracting diff against ${config.diffBase}...`);
-    const diff = extractDiff(config.diffBase, config.include, config.exclude);
+    const diff = extractDiff(config.diffBase, config.include, config.exclude, config.excludeTests);
 
     if (diff.files.length === 0) {
       logger.info('No changed files found. Nothing to mutate.');
@@ -145,38 +137,53 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
         ? new AnthropicMutationProvider(config.model)
         : new OpenAIMutationProvider(config.model);
 
-    // Step 4: For each file, generate mutations and test them
+    // Step 4: Generate mutations for ALL files in a single LLM call
+    logger.info(`Generating ${config.mutations} mutation(s) across all files...`);
+    const genResult = await provider.generateMutations(diff.files, config.mutations);
+    const mutations = genResult.mutations.slice(0, config.mutations);
+    logger.info(
+      `  Generated ${mutations.length} mutation(s)${genResult.retries > 0 ? ` (${genResult.retries} retries)` : ''}`,
+    );
+
+    // Step 5: Group mutations by file
+    const mutationsByFile = new Map<string, Mutation[]>();
+    for (const mutation of mutations) {
+      const existing = mutationsByFile.get(mutation.filePath) ?? [];
+      existing.push(mutation);
+      mutationsByFile.set(mutation.filePath, existing);
+    }
+
+    // Build file lookup for content
+    const fileByPath = new Map(diff.files.map((f) => [f.filePath, f]));
+
+    // Step 6: Test mutations grouped by file
     const fileResults: FileResult[] = [];
+    const tokenPerFile = emptyTokenUsage();
 
-    for (const file of diff.files) {
-      logger.info(`Processing ${file.filePath}...`);
+    for (const [filePath, fileMutations] of mutationsByFile) {
+      const file = fileByPath.get(filePath);
+      if (!file) continue;
 
-      // Generate mutations
-      const genResult = await provider.generateMutations(file, config.mutations);
-      logger.info(
-        `  Generated ${genResult.mutations.length} mutation(s)${genResult.retries > 0 ? ` (${genResult.retries} retries)` : ''}`,
-      );
+      logger.info(`Processing ${filePath} (${fileMutations.length} mutations)...`);
 
       if (config.dryRun) {
         fileResults.push({
-          filePath: file.filePath,
-          results: genResult.mutations.map((m) => ({
+          filePath,
+          results: fileMutations.map((m) => ({
             mutation: m,
             outcome: 'survived' as const,
             durationMs: 0,
           })),
-          tokenUsage: genResult.tokenUsage,
+          tokenUsage: tokenPerFile,
         });
         continue;
       }
 
-      // Test each mutation sequentially
       const results: MutationTestResult[] = [];
-      const absPath = path.join(root, file.filePath);
+      const absPath = path.join(root, filePath);
       fileManager.backup(absPath);
 
-      for (const mutation of genResult.mutations) {
-        // Validate originalCode matches
+      for (const mutation of fileMutations) {
         if (!validateOriginalCode(file.currentContent, mutation)) {
           logger.warn(`  Skipping ${mutation.id}: originalCode mismatch`);
           results.push({
@@ -189,11 +196,9 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
         }
 
         try {
-          // Apply mutation
           const mutatedContent = applyMutationToContent(file.currentContent, mutation);
           fileManager.applyMutation(absPath, mutatedContent);
 
-          // Run tests
           const testResult = await executeTests(config.testCommand, config.timeout);
 
           let outcome: MutationOutcome;
@@ -218,21 +223,19 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
             testOutput: String(err),
           });
         } finally {
-          // Always restore after each mutation
           fileManager.restore(absPath);
         }
       }
 
       fileResults.push({
-        filePath: file.filePath,
+        filePath,
         results,
-        tokenUsage: genResult.tokenUsage,
+        tokenUsage: tokenPerFile,
       });
     }
 
-    return aggregateResults(fileResults, startTime);
+    return aggregateResults(fileResults, genResult.tokenUsage, startTime);
   } finally {
-    // Guarantee clean working tree
     fileManager.restoreAll();
   }
 }

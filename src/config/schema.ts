@@ -10,6 +10,7 @@ export const MutantConfigSchema = z.object({
   output: z.enum(['text', 'json', 'github']).default('text'),
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
+  excludeTests: z.boolean().default(true),
   failOnSurvived: z.boolean().default(false),
   dryRun: z.boolean().default(false),
 });

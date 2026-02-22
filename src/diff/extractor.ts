@@ -3,6 +3,7 @@ import path from 'node:path';
 import { minimatch } from 'minimatch';
 import { gitDiff, gitRoot } from '../utils/git.js';
 import type { ChangedFile, ChangedHunk, ChangedLine, DiffResult } from './types.js';
+import { isTestFile } from './test-patterns.js';
 
 const LANGUAGE_MAP: Record<string, string> = {
   '.ts': 'typescript',
@@ -101,6 +102,7 @@ export function extractDiff(
   baseRef: string,
   include?: string[],
   exclude?: string[],
+  excludeTests: boolean = true,
 ): DiffResult {
   const root = gitRoot();
   const diffOutput = gitDiff(baseRef);
@@ -119,6 +121,10 @@ export function extractDiff(
       continue;
     }
     if (exclude && exclude.length > 0 && matchesGlobs(parsed.filePath, exclude)) {
+      continue;
+    }
+
+    if (excludeTests && isTestFile(parsed.filePath)) {
       continue;
     }
 

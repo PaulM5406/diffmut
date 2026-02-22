@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AnthropicMutationProvider } from '../../../src/mutation/anthropic-provider.js';
 import type { ChangedFile } from '../../../src/diff/types.js';
 
-function makeFile(): ChangedFile {
+function makeFile(overrides: Partial<ChangedFile> = {}): ChangedFile {
   return {
     filePath: 'src/test.ts',
     currentContent: 'line1\nline2\nline3\nline4\nline5',
@@ -17,6 +17,7 @@ function makeFile(): ChangedFile {
       },
     ],
     language: 'typescript',
+    ...overrides,
   };
 }
 
@@ -49,6 +50,7 @@ describe('AnthropicMutationProvider', () => {
     const client = mockAnthropicClient({
       mutations: [
         {
+          filePath: 'src/test.ts',
           startLine: 2,
           endLine: 2,
           originalCode: 'line2',
@@ -60,7 +62,7 @@ describe('AnthropicMutationProvider', () => {
     });
 
     const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
-    const result = await provider.generateMutations(makeFile(), 3);
+    const result = await provider.generateMutations([makeFile()], 3);
 
     expect(result.mutations).toHaveLength(1);
     expect(result.mutations[0].filePath).toBe('src/test.ts');
@@ -75,7 +77,7 @@ describe('AnthropicMutationProvider', () => {
     const client = mockAnthropicClient({ mutations: [] });
 
     const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
-    await provider.generateMutations(makeFile(), 1);
+    await provider.generateMutations([makeFile()], 1);
 
     const call = client.messages.create.mock.calls[0][0];
     expect(call.system).toBeDefined();
@@ -91,6 +93,7 @@ describe('AnthropicMutationProvider', () => {
     const client = mockAnthropicClient({
       mutations: [
         {
+          filePath: 'src/test.ts',
           startLine: 2,
           endLine: 2,
           originalCode: 'line2',
@@ -99,6 +102,7 @@ describe('AnthropicMutationProvider', () => {
           category: 'return-value',
         },
         {
+          filePath: 'src/test.ts',
           startLine: 5,
           endLine: 5,
           originalCode: 'line5',
@@ -110,7 +114,7 @@ describe('AnthropicMutationProvider', () => {
     });
 
     const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
-    const result = await provider.generateMutations(makeFile(), 3);
+    const result = await provider.generateMutations([makeFile()], 3);
 
     expect(result.mutations).toHaveLength(1);
     expect(result.mutations[0].description).toBe('Valid mutation');
@@ -120,6 +124,7 @@ describe('AnthropicMutationProvider', () => {
     const client = mockAnthropicClient({
       mutations: [
         {
+          filePath: 'src/test.ts',
           startLine: 2,
           endLine: 2,
           originalCode: 'line2',
@@ -131,7 +136,7 @@ describe('AnthropicMutationProvider', () => {
     });
 
     const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
-    const result = await provider.generateMutations(makeFile(), 3);
+    const result = await provider.generateMutations([makeFile()], 3);
 
     expect(result.mutations).toHaveLength(0);
   });
@@ -148,21 +153,87 @@ describe('AnthropicMutationProvider', () => {
     } as any;
 
     const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
-    const result = await provider.generateMutations(makeFile(), 3);
+    const result = await provider.generateMutations([makeFile()], 3);
 
     expect(result.mutations).toHaveLength(0);
     expect(result.tokenUsage.promptTokens).toBe(100);
   });
 
-  it('should include max_tokens and json_schema format in API call', async () => {
+  it('should include max_tokens of 8192 and json_schema format in API call', async () => {
     const client = mockAnthropicClient({ mutations: [] });
 
     const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
-    await provider.generateMutations(makeFile(), 1);
+    await provider.generateMutations([makeFile()], 1);
 
     const call = client.messages.create.mock.calls[0][0];
-    expect(call.max_tokens).toBe(4096);
+    expect(call.max_tokens).toBe(8192);
     expect(call.output_config.format.type).toBe('json_schema');
     expect(call.output_config.format.schema).toBeDefined();
+  });
+
+  it('should filter out mutations with unknown filePath', async () => {
+    const client = mockAnthropicClient({
+      mutations: [
+        {
+          filePath: 'src/test.ts',
+          startLine: 2,
+          endLine: 2,
+          originalCode: 'line2',
+          mutatedCode: 'modified',
+          description: 'Valid mutation',
+          category: 'return-value',
+        },
+        {
+          filePath: 'src/nonexistent.ts',
+          startLine: 1,
+          endLine: 1,
+          originalCode: 'foo',
+          mutatedCode: 'bar',
+          description: 'Hallucinated file',
+          category: 'return-value',
+        },
+      ],
+    });
+
+    const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
+    const result = await provider.generateMutations([makeFile()], 3);
+
+    expect(result.mutations).toHaveLength(1);
+    expect(result.mutations[0].description).toBe('Valid mutation');
+  });
+
+  it('should handle multiple files in a single call', async () => {
+    const file1 = makeFile({ filePath: 'src/foo.ts' });
+    const file2 = makeFile({ filePath: 'src/bar.ts' });
+
+    const client = mockAnthropicClient({
+      mutations: [
+        {
+          filePath: 'src/foo.ts',
+          startLine: 2,
+          endLine: 2,
+          originalCode: 'line2',
+          mutatedCode: 'modified_foo',
+          description: 'Mutate foo',
+          category: 'return-value',
+        },
+        {
+          filePath: 'src/bar.ts',
+          startLine: 3,
+          endLine: 3,
+          originalCode: 'line3',
+          mutatedCode: 'modified_bar',
+          description: 'Mutate bar',
+          category: 'logical-operator',
+        },
+      ],
+    });
+
+    const provider = new AnthropicMutationProvider('claude-sonnet-4-5-20250514', client);
+    const result = await provider.generateMutations([file1, file2], 5);
+
+    expect(result.mutations).toHaveLength(2);
+    expect(result.mutations[0].filePath).toBe('src/foo.ts');
+    expect(result.mutations[1].filePath).toBe('src/bar.ts');
   });
 });

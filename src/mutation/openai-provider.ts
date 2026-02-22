@@ -4,8 +4,8 @@ import type { ChangedFile } from '../diff/types.js';
 import { logger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
 import type { MutationProvider } from './provider.js';
-import { filterAndMapMutations, shouldRetryOnStatus } from './provider-utils.js';
-import { buildPrompt } from './prompt.js';
+import { filterAndMapMultiFileMutations, shouldRetryOnStatus } from './provider-utils.js';
+import { buildMultiFilePrompt } from './prompt.js';
 import { MutationResponseSchema } from './schemas.js';
 import type { MutationGenerationResult, TokenUsage } from './types.js';
 
@@ -30,10 +30,10 @@ export class OpenAIMutationProvider implements MutationProvider {
   }
 
   async generateMutations(
-    file: ChangedFile,
+    files: ChangedFile[],
     count: number,
   ): Promise<MutationGenerationResult> {
-    const messages = buildPrompt(file, count);
+    const messages = buildMultiFilePrompt(files, count);
 
     const { result: completion, retries } = await withRetry(
       async () => {
@@ -49,7 +49,8 @@ export class OpenAIMutationProvider implements MutationProvider {
 
     const parsed = completion.choices[0]?.message?.parsed;
     if (!parsed) {
-      logger.warn(`Empty response from ${this.model} for ${file.filePath}`);
+      const filePaths = files.map((f) => f.filePath).join(', ');
+      logger.warn(`Empty response from ${this.model} for ${filePaths}`);
       return {
         mutations: [],
         tokenUsage: extractTokenUsage(completion),
@@ -61,7 +62,7 @@ export class OpenAIMutationProvider implements MutationProvider {
     logger.addTokenUsage(tokenUsage);
 
     return {
-      mutations: filterAndMapMutations(parsed, file),
+      mutations: filterAndMapMultiFileMutations(parsed, files),
       tokenUsage,
       retries,
     };

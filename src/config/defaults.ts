@@ -10,6 +10,7 @@ export const DEFAULTS = {
   model: 'gpt-4o',
   timeout: 300,
   output: 'text' as const,
+  excludeTests: true,
   failOnSurvived: false,
   dryRun: false,
 };
