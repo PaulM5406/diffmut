@@ -34,6 +34,7 @@ export class GithubReporter implements Reporter {
     lines.push('|--------|------|----------|----------|');
 
     const survived: MutationTestResult[] = [];
+    const caught: MutationTestResult[] = [];
 
     for (const fileResult of result.fileResults) {
       for (const r of fileResult.results) {
@@ -43,6 +44,8 @@ export class GithubReporter implements Reporter {
 
         if (r.outcome === 'survived' || r.outcome === 'no_coverage') {
           survived.push(r);
+        } else if (r.outcome === 'killed') {
+          caught.push(r);
         }
       }
     }
@@ -55,6 +58,31 @@ export class GithubReporter implements Reporter {
       lines.push('');
 
       for (const r of survived) {
+        lines.push(`### \`${r.mutation.filePath}:${r.mutation.startLine}\` - ${r.mutation.category}`);
+        lines.push(r.mutation.description);
+        lines.push('');
+        lines.push('```diff');
+        for (const line of r.mutation.originalCode.split('\n')) {
+          lines.push(`- ${line}`);
+        }
+        for (const line of r.mutation.mutatedCode.split('\n')) {
+          lines.push(`+ ${line}`);
+        }
+        lines.push('```');
+        lines.push('');
+      }
+
+      lines.push('</details>');
+    }
+
+    // Details for caught mutations
+    if (caught.length > 0) {
+      lines.push('');
+      lines.push('<details>');
+      lines.push(`<summary>Caught mutations (${caught.length})</summary>`);
+      lines.push('');
+
+      for (const r of caught) {
         lines.push(`### \`${r.mutation.filePath}:${r.mutation.startLine}\` - ${r.mutation.category}`);
         lines.push(r.mutation.description);
         lines.push('');

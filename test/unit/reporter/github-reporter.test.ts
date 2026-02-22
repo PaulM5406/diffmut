@@ -60,9 +60,12 @@ describe('GithubReporter', () => {
     expect(output).toContain(':white_check_mark:');
     expect(output).toContain(':warning:');
     expect(output).toContain('Uncaught mutations (1)');
+    expect(output).toContain('Caught mutations (1)');
     expect(output).toContain('```diff');
     expect(output).toContain('- x > 0');
     expect(output).toContain('+ x >= 0');
+    expect(output).toContain('- return true;');
+    expect(output).toContain('+ return false;');
   });
 
   it('should not show survived details when none survived', () => {
@@ -104,5 +107,8 @@ describe('GithubReporter', () => {
     const output = reporter.report(result);
 
     expect(output).not.toContain('Uncaught mutations');
+    expect(output).toContain('Caught mutations (1)');
+    expect(output).toContain('- x');
+    expect(output).toContain('+ y');
   });
 });
