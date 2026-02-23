@@ -37,10 +37,86 @@ Rules:
 7. Consider the SEMANTICS of the code, not just syntactic transformations
 8. When mutating Python code, consider Pythonic patterns like list comprehensions, context managers, and truthiness
 9. When mutating TypeScript/JavaScript, consider type narrowing, optional chaining, and nullish coalescing
-10. Distribute mutations intelligently across files based on complexity and risk. Each mutation must include the filePath.`;
+10. Distribute mutations intelligently across files based on complexity and risk. Each mutation must include the filePath.
+
+Before generating mutations, analyze the changed code to identify the critical behavioral invariants — the things that MUST be true for the code to work correctly. Then generate mutations that violate those invariants in subtle, plausible ways. Prioritize mutations that test:
+- Edge cases and boundary conditions specific to the business logic
+- Incorrect handling of specific domain values
+- Subtle logic inversions that would silently produce wrong results
+- Error conditions that could be swallowed or mishandled`;
+
+const TYPE_CHECKED_SECTION = `
+
+IMPORTANT — This project uses static type checking. Every mutation MUST produce code that would pass the type checker. Do NOT generate mutations that:
+- Change type annotations without changing runtime behavior
+- Assign values of incompatible types (e.g. None to a non-Optional field)
+- Remove or alter type guards where the type system would reject the code
+- Would cause a compilation or type-check error
+Focus exclusively on behavioral mutations: logic errors, boundary mistakes, wrong return values — bugs that are type-correct but semantically wrong.`;
+
+export interface PromptOptions {
+  typeChecked?: boolean;
+  commitMessages?: string;
+}
 
 const MAX_ANNOTATED_LINES = 500;
 const CONTEXT_LINES_AROUND_HUNK = 30;
+const MAX_EXPANSION_PER_FUNCTION = 100;
+
+const FUNCTION_START_RE =
+  /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\s+\w+|class\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?\(|(?:public|private|protected|static|\w+)\s*\(|def\s+\w+|fn\s+\w+)/;
+
+export function expandToFunctionBoundaries(
+  lines: string[],
+  visibleLines: Set<number>,
+): Set<number> {
+  const expanded = new Set(visibleLines);
+
+  // Find contiguous ranges of visible lines
+  const ranges: Array<[number, number]> = [];
+  let rangeStart = -1;
+  let rangePrev = -1;
+  for (const lineNum of [...visibleLines].sort((a, b) => a - b)) {
+    if (rangeStart === -1 || lineNum > rangePrev + 1) {
+      if (rangeStart !== -1) ranges.push([rangeStart, rangePrev]);
+      rangeStart = lineNum;
+    }
+    rangePrev = lineNum;
+  }
+  if (rangeStart !== -1) ranges.push([rangeStart, rangePrev]);
+
+  for (const [start, end] of ranges) {
+    // Scan upward to find function/class start
+    let funcStart = start;
+    for (let i = start - 1; i >= Math.max(1, start - MAX_EXPANSION_PER_FUNCTION); i--) {
+      if (FUNCTION_START_RE.test(lines[i - 1])) {
+        funcStart = i;
+        break;
+      }
+    }
+
+    // Scan downward to find matching closing brace
+    let funcEnd = end;
+    let braceDepth = 0;
+    for (let i = funcStart; i <= Math.min(lines.length, end + MAX_EXPANSION_PER_FUNCTION); i++) {
+      const line = lines[i - 1];
+      for (const ch of line) {
+        if (ch === '{') braceDepth++;
+        else if (ch === '}') braceDepth--;
+      }
+      if (i >= end && braceDepth <= 0) {
+        funcEnd = i;
+        break;
+      }
+    }
+
+    for (let i = funcStart; i <= funcEnd; i++) {
+      expanded.add(i);
+    }
+  }
+
+  return expanded;
+}
 
 export function buildAnnotatedContent(file: ChangedFile): string {
   const lines = file.currentContent.split('\n');
@@ -82,11 +158,14 @@ export function buildAnnotatedContent(file: ChangedFile): string {
     visibleLines.add(i);
   }
 
+  // Expand to include full function bodies
+  const expandedLines = expandToFunctionBoundaries(lines, visibleLines);
+
   const result: string[] = [];
   let lastShown = 0;
 
   for (let i = 1; i <= lines.length; i++) {
-    if (visibleLines.has(i)) {
+    if (expandedLines.has(i)) {
       if (lastShown > 0 && i - lastShown > 1) {
         result.push(`     ... (${i - lastShown - 1} lines omitted) ...`);
       }
@@ -106,6 +185,7 @@ export function buildAnnotatedContent(file: ChangedFile): string {
 export function buildMultiFilePrompt(
   files: ChangedFile[],
   totalCount: number,
+  options?: PromptOptions,
 ): Array<{ role: 'system' | 'user'; content: string }> {
   const fileSections = files
     .map((file) => {
@@ -118,11 +198,25 @@ ${annotated}
     })
     .join('\n\n');
 
+  const systemContent = options?.typeChecked
+    ? SYSTEM_PROMPT + TYPE_CHECKED_SECTION
+    : SYSTEM_PROMPT;
+
+  const commitSection =
+    options?.commitMessages
+      ? `## PR Context — Commit Messages
+${options.commitMessages}
+
+Use these commit messages to understand the intent of the changes. Focus mutations on the critical behavioral invariants that these changes introduce or modify.
+
+`
+      : '';
+
   return [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemContent },
     {
       role: 'user',
-      content: `Below are all changed files in this PR. Lines prefixed with [CHANGED] are within the git diff and are eligible for mutation. Lines prefixed with [CONTEXT] provide surrounding context but must NOT be mutated.
+      content: `${commitSection}Below are all changed files in this PR. Lines prefixed with [CHANGED] are within the git diff and are eligible for mutation. Lines prefixed with [CONTEXT] provide surrounding context but must NOT be mutated.
 
 ${fileSections}
 

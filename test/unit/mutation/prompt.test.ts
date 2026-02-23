@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnnotatedContent, buildMultiFilePrompt } from '../../../src/mutation/prompt.js';
+import { buildAnnotatedContent, buildMultiFilePrompt, expandToFunctionBoundaries } from '../../../src/mutation/prompt.js';
 import { makeFile } from '../../helpers.js';
 
 describe('buildAnnotatedContent', () => {
@@ -101,5 +101,134 @@ describe('buildMultiFilePrompt', () => {
 
     expect(messages[1].content).toContain('=== File: src/only.ts (typescript) ===');
     expect(messages[1].content).toContain('3 mutations');
+  });
+
+  it('should append type-checking guidance when typeChecked is true', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5, { typeChecked: true });
+
+    expect(messages[0].content).toContain('static type checking');
+    expect(messages[0].content).toContain('behavioral mutations');
+  });
+
+  it('should not include type-checking guidance when typeChecked is false', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5, { typeChecked: false });
+
+    expect(messages[0].content).not.toContain('static type checking');
+  });
+
+  it('should not include type-checking guidance when options are omitted', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    expect(messages[0].content).not.toContain('static type checking');
+  });
+
+  it('should include commit messages in user prompt when provided', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5, { commitMessages: 'feat: add caching layer' });
+
+    expect(messages[1].content).toContain('## PR Context — Commit Messages');
+    expect(messages[1].content).toContain('feat: add caching layer');
+    expect(messages[1].content).toContain('intent of the changes');
+  });
+
+  it('should omit commit messages section when commitMessages is empty', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5, { commitMessages: '' });
+
+    expect(messages[1].content).not.toContain('## PR Context');
+  });
+
+  it('should omit commit messages section when commitMessages is absent', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    expect(messages[1].content).not.toContain('## PR Context');
+  });
+
+  it('should include behavioral invariants language in system prompt', () => {
+    const files = [makeFile()];
+    const messages = buildMultiFilePrompt(files, 5);
+
+    expect(messages[0].content).toContain('behavioral invariants');
+    expect(messages[0].content).toContain('Edge cases and boundary conditions');
+  });
+});
+
+describe('expandToFunctionBoundaries', () => {
+  it('should expand upward to function start', () => {
+    const lines = [
+      'import foo from "bar";',
+      '',
+      'function doSomething() {',
+      '  const x = 1;',
+      '  const y = 2;',
+      '  return x + y;',
+      '}',
+    ];
+    // Only line 5 is visible (inside the function)
+    const visible = new Set([5]);
+    const expanded = expandToFunctionBoundaries(lines, visible);
+
+    // Should include the function declaration (line 3) through closing brace (line 7)
+    expect(expanded.has(3)).toBe(true);
+    expect(expanded.has(7)).toBe(true);
+  });
+
+  it('should expand downward to closing brace', () => {
+    const lines = [
+      'function doSomething() {',
+      '  if (true) {',
+      '    return 1;',
+      '  }',
+      '  return 0;',
+      '}',
+    ];
+    const visible = new Set([2]);
+    const expanded = expandToFunctionBoundaries(lines, visible);
+
+    expect(expanded.has(1)).toBe(true);
+    expect(expanded.has(6)).toBe(true);
+  });
+
+  it('should preserve all originally visible lines', () => {
+    const lines = ['a', 'b', 'c'];
+    const visible = new Set([1, 2, 3]);
+    const expanded = expandToFunctionBoundaries(lines, visible);
+
+    expect(expanded.has(1)).toBe(true);
+    expect(expanded.has(2)).toBe(true);
+    expect(expanded.has(3)).toBe(true);
+  });
+
+  it('should expand to nearest enclosing method inside a class', () => {
+    const lines = [
+      'class Foo {',
+      '  method() {',
+      '    return 1;',
+      '  }',
+      '}',
+    ];
+    const visible = new Set([3]);
+    const expanded = expandToFunctionBoundaries(lines, visible);
+
+    // Finds the nearest method boundary, not the outer class
+    expect(expanded.has(2)).toBe(true);
+    expect(expanded.has(4)).toBe(true);
+  });
+
+  it('should expand to class boundary when visible line is at class level', () => {
+    const lines = [
+      'class Foo {',
+      '  x = 1;',
+      '}',
+    ];
+    const visible = new Set([2]);
+    const expanded = expandToFunctionBoundaries(lines, visible);
+
+    expect(expanded.has(1)).toBe(true);
+    expect(expanded.has(3)).toBe(true);
   });
 });

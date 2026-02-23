@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name('diffmut')
   .description('LLM-powered mutation testing')
-  .version('0.0.8');
+  .version('0.1.0');
 
 program
   .command('run')
@@ -30,6 +30,7 @@ program
   .option('--no-exclude-tests', 'Include test files in mutation testing')
   .option('--fail-on-survived', 'Exit code 2 if any mutation survives')
   .option('--dry-run', 'Generate mutations but do not execute tests')
+  .option('--type-checked', 'Avoid mutations that would be caught by a type checker')
   .option('--config <path>', 'Path to config file')
   .action(async (opts) => {
     try {

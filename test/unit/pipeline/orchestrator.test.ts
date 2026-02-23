@@ -68,6 +68,7 @@ const baseConfig: MutantConfig = {
   excludeTests: true,
   failOnSurvived: false,
   dryRun: false,
+  typeChecked: false,
 };
 
 describe('runPipeline', () => {
@@ -76,7 +77,7 @@ describe('runPipeline', () => {
   });
 
   it('should return empty result when no files changed', async () => {
-    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files: [] });
+    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files: [], commitMessages: '' });
 
     const result = await runPipeline(baseConfig);
     expect(result.totalMutations).toBe(0);
@@ -84,7 +85,7 @@ describe('runPipeline', () => {
   });
 
   it('should pass excludeTests to extractDiff', async () => {
-    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files: [] });
+    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files: [], commitMessages: '' });
 
     await runPipeline(baseConfig);
     expect(extractDiff).toHaveBeenCalledWith('origin/main', undefined, undefined, true);
@@ -93,6 +94,7 @@ describe('runPipeline', () => {
   it('should run preflight before testing mutations', async () => {
     vi.mocked(extractDiff).mockReturnValue({
       baseRef: 'origin/main',
+      commitMessages: '',
       files: [
         {
           filePath: 'src/test.ts',
@@ -133,7 +135,7 @@ describe('runPipeline', () => {
       },
     ];
 
-    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files });
+    vi.mocked(extractDiff).mockReturnValue({ baseRef: 'origin/main', files, commitMessages: 'feat: test commit' });
 
     const mockProvider = {
       name: 'openai',
@@ -149,12 +151,13 @@ describe('runPipeline', () => {
 
     // Single call with all files, not one per file
     expect(mockProvider.generateMutations).toHaveBeenCalledOnce();
-    expect(mockProvider.generateMutations).toHaveBeenCalledWith(files, 3);
+    expect(mockProvider.generateMutations).toHaveBeenCalledWith(files, 3, { typeChecked: false, commitMessages: 'feat: test commit' });
   });
 
   it('should skip preflight in dry-run mode', async () => {
     vi.mocked(extractDiff).mockReturnValue({
       baseRef: 'origin/main',
+      commitMessages: '',
       files: [
         {
           filePath: 'src/test.ts',
@@ -194,6 +197,7 @@ describe('runPipeline', () => {
   it('should truncate mutations to requested count', async () => {
     vi.mocked(extractDiff).mockReturnValue({
       baseRef: 'origin/main',
+      commitMessages: '',
       files: [
         {
           filePath: 'src/test.ts',

@@ -13,6 +13,7 @@ export const MutantConfigSchema = z.object({
   excludeTests: z.boolean().default(true),
   failOnSurvived: z.boolean().default(false),
   dryRun: z.boolean().default(false),
+  typeChecked: z.boolean().default(false),
 });
 
 export function resolveProvider(config: MutantConfig): 'openai' | 'anthropic' {

@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
 import type { MutationProvider } from './provider.js';
 import { filterAndMapMultiFileMutations, shouldRetryOnStatus } from './provider-utils.js';
-import { buildMultiFilePrompt } from './prompt.js';
+import { buildMultiFilePrompt, type PromptOptions } from './prompt.js';
 import { MutationResponseSchema, type MutationResponse } from './schemas.js';
 import type { MutationGenerationResult, TokenUsage } from './types.js';
 
@@ -47,8 +47,9 @@ export class AnthropicMutationProvider implements MutationProvider {
   async generateMutations(
     files: ChangedFile[],
     count: number,
+    options?: PromptOptions,
   ): Promise<MutationGenerationResult> {
-    const messages = buildMultiFilePrompt(files, count);
+    const messages = buildMultiFilePrompt(files, count, options);
     const systemContent = messages.find((m) => m.role === 'system')?.content ?? '';
     const userMessages = messages
       .filter((m) => m.role !== 'system')

@@ -5,7 +5,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { execSync } from 'node:child_process';
-import { isInsideGitRepo, gitRoot, gitDiff } from '../../../src/utils/git.js';
+import { isInsideGitRepo, gitRoot, gitDiff, gitCommitMessages } from '../../../src/utils/git.js';
 
 const mockedExecSync = vi.mocked(execSync);
 
@@ -72,6 +72,31 @@ describe('git utilities', () => {
     it('passes CI-safe env', () => {
       mockedExecSync.mockReturnValue('');
       gitDiff('origin/main');
+      expect(getEnv().GIT_DISCOVERY_ACROSS_FILESYSTEM).toBe('1');
+    });
+  });
+
+  describe('gitCommitMessages', () => {
+    it('calls git log with correct format and baseRef', () => {
+      mockedExecSync.mockReturnValue('feat: add feature\n\nSome body\n');
+      const result = gitCommitMessages('origin/main');
+      expect(mockedExecSync).toHaveBeenCalledWith(
+        'git log origin/main...HEAD --format="%s%n%n%b" --no-merges',
+        expect.objectContaining({ encoding: 'utf-8' }),
+      );
+      expect(result).toBe('feat: add feature\n\nSome body');
+    });
+
+    it('returns empty string on error', () => {
+      mockedExecSync.mockImplementation(() => {
+        throw new Error('git log failed');
+      });
+      expect(gitCommitMessages('origin/main')).toBe('');
+    });
+
+    it('passes CI-safe env', () => {
+      mockedExecSync.mockReturnValue('msg\n');
+      gitCommitMessages('origin/main');
       expect(getEnv().GIT_DISCOVERY_ACROSS_FILESYSTEM).toBe('1');
     });
   });

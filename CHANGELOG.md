@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.1.0] - 2026-02-23
+
+### Added
+
+- Commit messages fed to the LLM prompt for mutation context, enabling intent-aware mutations
+- Function boundary expansion for large truncated files so the LLM sees complete function bodies
+- System prompt now instructs the LLM to analyze behavioral invariants before generating mutations
+
 ## [v0.0.8] - 2026-02-23
 
 ### Fixed

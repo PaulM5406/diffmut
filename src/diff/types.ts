@@ -20,4 +20,5 @@ export interface ChangedFile {
 export interface DiffResult {
   baseRef: string;
   files: ChangedFile[];
+  commitMessages: string;
 }

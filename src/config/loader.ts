@@ -20,6 +20,7 @@ export interface CLIOptions {
   excludeTests?: boolean;
   failOnSurvived?: boolean;
   dryRun?: boolean;
+  typeChecked?: boolean;
 }
 
 function findConfigFile(startDir: string): string | null {
@@ -74,6 +75,7 @@ export async function loadConfig(cliOpts: CLIOptions): Promise<MutantConfig> {
     ...(cliOpts.excludeTests !== undefined && { excludeTests: cliOpts.excludeTests }),
     ...(cliOpts.failOnSurvived !== undefined && { failOnSurvived: cliOpts.failOnSurvived }),
     ...(cliOpts.dryRun !== undefined && { dryRun: cliOpts.dryRun }),
+    ...(cliOpts.typeChecked !== undefined && { typeChecked: cliOpts.typeChecked }),
   };
 
   // Validate

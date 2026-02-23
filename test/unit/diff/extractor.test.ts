@@ -7,11 +7,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../../../src/utils/git.js', () => ({
   gitDiff: vi.fn(),
   gitRoot: vi.fn(() => '/fake/repo'),
+  gitCommitMessages: vi.fn(() => 'feat: some commit message'),
 }));
 
 import fs from 'node:fs';
 import { extractDiff } from '../../../src/diff/extractor.js';
-import { gitDiff, gitRoot } from '../../../src/utils/git.js';
+import { gitDiff, gitRoot, gitCommitMessages } from '../../../src/utils/git.js';
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual('node:fs');
@@ -192,6 +193,33 @@ index abc..def 100644
 
     const result = extractDiff('origin/main', undefined, undefined, false);
     expect(result.files).toHaveLength(2);
+  });
+
+  it('should include commitMessages from git log', () => {
+    vi.mocked(gitDiff).mockReturnValue(
+      `diff --git a/src/utils.ts b/src/utils.ts
+index abc..def 100644
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -1,3 +1,4 @@
+ line1
++new line
+ line2
+ line3
+`,
+    );
+    vi.mocked(gitCommitMessages).mockReturnValue('feat: add new utility');
+
+    const result = extractDiff('origin/main');
+    expect(result.commitMessages).toBe('feat: add new utility');
+  });
+
+  it('should include empty commitMessages for empty diff', () => {
+    vi.mocked(gitDiff).mockReturnValue('');
+    vi.mocked(gitCommitMessages).mockReturnValue('some messages');
+
+    const result = extractDiff('origin/main');
+    expect(result.commitMessages).toBe('some messages');
   });
 
   it('should exclude Python test files by default', () => {

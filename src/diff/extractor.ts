@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { minimatch } from 'minimatch';
-import { gitDiff, gitRoot } from '../utils/git.js';
+import { gitCommitMessages, gitDiff, gitRoot } from '../utils/git.js';
 import type { ChangedFile, ChangedHunk, ChangedLine, DiffResult } from './types.js';
 import { isTestFile } from './test-patterns.js';
 
@@ -106,9 +106,10 @@ export function extractDiff(
 ): DiffResult {
   const root = gitRoot();
   const diffOutput = gitDiff(baseRef);
+  const commitMessages = gitCommitMessages(baseRef);
 
   if (!diffOutput.trim()) {
-    return { baseRef, files: [] };
+    return { baseRef, files: [], commitMessages };
   }
 
   const parsedFiles = parseUnifiedDiff(diffOutput);
@@ -148,5 +149,5 @@ export function extractDiff(
     });
   }
 
-  return { baseRef, files };
+  return { baseRef, files, commitMessages };
 }

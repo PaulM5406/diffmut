@@ -217,7 +217,10 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
 
     // Step 4: Generate mutations for ALL files in a single LLM call
     logger.info(`Generating ${config.mutations} mutation(s) across all files...`);
-    const genResult = await provider.generateMutations(diff.files, config.mutations);
+    const genResult = await provider.generateMutations(diff.files, config.mutations, {
+      typeChecked: config.typeChecked,
+      commitMessages: diff.commitMessages,
+    });
     const mutations = genResult.mutations.slice(0, config.mutations);
     logger.info(
       `  Generated ${mutations.length} mutation(s)${genResult.retries > 0 ? ` (${genResult.retries} retries)` : ''}`,

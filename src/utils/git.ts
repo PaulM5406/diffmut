@@ -32,6 +32,18 @@ export function gitRoot(): string {
   }).trim();
 }
 
+export function gitCommitMessages(baseRef: string): string {
+  try {
+    return execSync(`git log ${baseRef}...HEAD --format="%s%n%n%b" --no-merges`, {
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+      env: GIT_ENV,
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
 export function isInsideGitRepo(): boolean {
   try {
     execSync('git rev-parse --is-inside-work-tree', {

@@ -32,6 +32,7 @@ describe('loadConfig', () => {
     expect(config.output).toBe('text');
     expect(config.failOnSurvived).toBe(false);
     expect(config.dryRun).toBe(false);
+    expect(config.typeChecked).toBe(false);
   });
 
   it('should override defaults with CLI options', async () => {
@@ -45,6 +46,7 @@ describe('loadConfig', () => {
       output: 'json',
       failOnSurvived: true,
       dryRun: true,
+      typeChecked: true,
     });
     expect(config.testCommand).toBe('pytest');
     expect(config.diffBase).toBe('main');
@@ -55,6 +57,7 @@ describe('loadConfig', () => {
     expect(config.output).toBe('json');
     expect(config.failOnSurvived).toBe(true);
     expect(config.dryRun).toBe(true);
+    expect(config.typeChecked).toBe(true);
   });
 
   it('should throw if OPENAI_API_KEY is missing for OpenAI provider', async () => {
