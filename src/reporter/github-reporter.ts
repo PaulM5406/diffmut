@@ -18,6 +18,34 @@ function outcomeIcon(outcome: string): string {
   }
 }
 
+function renderMutationDetails(mutations: MutationTestResult[], label: string): string[] {
+  if (mutations.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('<details>');
+  lines.push(`<summary>${label} (${mutations.length})</summary>`);
+  lines.push('');
+
+  for (const r of mutations) {
+    lines.push(`### \`${r.mutation.filePath}:${r.mutation.startLine}\` - ${r.mutation.category}`);
+    lines.push(r.mutation.description);
+    lines.push('');
+    lines.push('```diff');
+    for (const line of r.mutation.originalCode.split('\n')) {
+      lines.push(`- ${line}`);
+    }
+    for (const line of r.mutation.mutatedCode.split('\n')) {
+      lines.push(`+ ${line}`);
+    }
+    lines.push('```');
+    lines.push('');
+  }
+
+  lines.push('</details>');
+  return lines;
+}
+
 export class GithubReporter implements Reporter {
   report(result: PipelineResult): string {
     const lines: string[] = [];
@@ -50,55 +78,8 @@ export class GithubReporter implements Reporter {
       }
     }
 
-    // Details for survived mutations
-    if (survived.length > 0) {
-      lines.push('');
-      lines.push('<details>');
-      lines.push(`<summary>Uncaught mutations (${survived.length})</summary>`);
-      lines.push('');
-
-      for (const r of survived) {
-        lines.push(`### \`${r.mutation.filePath}:${r.mutation.startLine}\` - ${r.mutation.category}`);
-        lines.push(r.mutation.description);
-        lines.push('');
-        lines.push('```diff');
-        for (const line of r.mutation.originalCode.split('\n')) {
-          lines.push(`- ${line}`);
-        }
-        for (const line of r.mutation.mutatedCode.split('\n')) {
-          lines.push(`+ ${line}`);
-        }
-        lines.push('```');
-        lines.push('');
-      }
-
-      lines.push('</details>');
-    }
-
-    // Details for caught mutations
-    if (caught.length > 0) {
-      lines.push('');
-      lines.push('<details>');
-      lines.push(`<summary>Caught mutations (${caught.length})</summary>`);
-      lines.push('');
-
-      for (const r of caught) {
-        lines.push(`### \`${r.mutation.filePath}:${r.mutation.startLine}\` - ${r.mutation.category}`);
-        lines.push(r.mutation.description);
-        lines.push('');
-        lines.push('```diff');
-        for (const line of r.mutation.originalCode.split('\n')) {
-          lines.push(`- ${line}`);
-        }
-        for (const line of r.mutation.mutatedCode.split('\n')) {
-          lines.push(`+ ${line}`);
-        }
-        lines.push('```');
-        lines.push('');
-      }
-
-      lines.push('</details>');
-    }
+    lines.push(...renderMutationDetails(survived, 'Uncaught mutations'));
+    lines.push(...renderMutationDetails(caught, 'Caught mutations'));
 
     lines.push('');
     lines.push(

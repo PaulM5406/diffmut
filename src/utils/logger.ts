@@ -1,5 +1,4 @@
 import pc from 'picocolors';
-import type { TokenUsage } from '../mutation/types.js';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -12,7 +11,6 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 
 export const logger = {
   level: 'info' as LogLevel,
-  tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } as TokenUsage,
 
   shouldLog(level: LogLevel): boolean {
     return LEVEL_ORDER[level] >= LEVEL_ORDER[this.level];
@@ -40,11 +38,5 @@ export const logger = {
     if (this.shouldLog('error')) {
       console.error(pc.red(`✖ ${msg}`));
     }
-  },
-
-  addTokenUsage(usage: TokenUsage): void {
-    this.tokenUsage.promptTokens += usage.promptTokens;
-    this.tokenUsage.completionTokens += usage.completionTokens;
-    this.tokenUsage.totalTokens += usage.totalTokens;
   },
 };

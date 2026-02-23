@@ -79,34 +79,48 @@ runs:
       env:
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_TEST_COMMAND: ${{ inputs.test-command }}
+        INPUT_DIFF_BASE: ${{ steps.detect-base.outputs.base }}
+        INPUT_MUTATIONS: ${{ inputs.mutations }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_FAIL_ON_SURVIVED: ${{ inputs.fail-on-survived }}
+        INPUT_INCLUDE: ${{ inputs.include }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
       run: |
-        ARGS="--test-command '${{ inputs.test-command }}'"
-        ARGS="$ARGS --diff-base ${{ steps.detect-base.outputs.base }}"
-        ARGS="$ARGS --mutations ${{ inputs.mutations }}"
-        ARGS="$ARGS --model ${{ inputs.model }}"
-        ARGS="$ARGS --timeout ${{ inputs.timeout }}"
-        ARGS="$ARGS --output github"
+        ARGS=(
+          --test-command "$INPUT_TEST_COMMAND"
+          --diff-base "$INPUT_DIFF_BASE"
+          --mutations "$INPUT_MUTATIONS"
+          --model "$INPUT_MODEL"
+          --timeout "$INPUT_TIMEOUT"
+          --output github
+        )
 
-        if [ -n "${{ inputs.provider }}" ]; then
-          ARGS="$ARGS --provider ${{ inputs.provider }}"
+        if [ -n "$INPUT_PROVIDER" ]; then
+          ARGS+=(--provider "$INPUT_PROVIDER")
         fi
 
-        if [ "${{ inputs.fail-on-survived }}" = "true" ]; then
-          ARGS="$ARGS --fail-on-survived"
+        if [ "$INPUT_FAIL_ON_SURVIVED" = "true" ]; then
+          ARGS+=(--fail-on-survived)
         fi
 
-        if [ -n "${{ inputs.include }}" ]; then
-          ARGS="$ARGS --include ${{ inputs.include }}"
+        if [ -n "$INPUT_INCLUDE" ]; then
+          ARGS+=(--include $INPUT_INCLUDE)
         fi
 
-        if [ -n "${{ inputs.exclude }}" ]; then
-          ARGS="$ARGS --exclude ${{ inputs.exclude }}"
+        if [ -n "$INPUT_EXCLUDE" ]; then
+          ARGS+=(--exclude $INPUT_EXCLUDE)
         fi
 
         EXIT_CODE=0
-        REPORT=$(eval diffmut run $ARGS 2>/dev/null) || EXIT_CODE=$?
+        REPORT=$(diffmut run "${ARGS[@]}" 2>/dev/null) || EXIT_CODE=$?
 
-        # Extract score from JSON if possible, fallback to report parsing
+        # Extract mutation score from the report (e.g. "Mutation Score: 75.0%")
+        SCORE=$(echo "$REPORT" | grep -oP '(?<=Mutation Score: )\d+(\.\d+)?' || echo "")
+        echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+
         echo "report<<DIFFMUT_EOF" >> "$GITHUB_OUTPUT"
         echo "$REPORT" >> "$GITHUB_OUTPUT"
         echo "DIFFMUT_EOF" >> "$GITHUB_OUTPUT"

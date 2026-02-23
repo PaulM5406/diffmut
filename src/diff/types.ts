@@ -1,7 +1,7 @@
 export interface ChangedLine {
   lineNumber: number;
   content: string;
-  type: 'added' | 'modified';
+  type: 'added';
 }
 
 export interface ChangedHunk {

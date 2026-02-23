@@ -17,18 +17,21 @@ function extractTokenUsage(response: Anthropic.Message): TokenUsage {
   };
 }
 
-function parseJsonContent(response: Anthropic.Message): MutationResponse | null {
-  for (const block of response.content) {
+function parseJsonContent(response: Anthropic.Message): { data: MutationResponse | null; reason: 'empty' | 'malformed' | 'ok' } {
+  const textBlocks = response.content.filter((b) => b.type === 'text');
+  if (textBlocks.length === 0) return { data: null, reason: 'empty' };
+
+  for (const block of textBlocks) {
     if (block.type === 'text') {
       try {
         const result = MutationResponseSchema.safeParse(JSON.parse(block.text));
-        if (result.success) return result.data;
+        if (result.success) return { data: result.data, reason: 'ok' };
       } catch {
-        // not valid JSON, skip
+        // not valid JSON, try next block
       }
     }
   }
-  return null;
+  return { data: null, reason: 'malformed' };
 }
 
 export class AnthropicMutationProvider implements MutationProvider {
@@ -73,10 +76,11 @@ export class AnthropicMutationProvider implements MutationProvider {
       { maxRetries: 2, shouldRetry: shouldRetryOnStatus },
     );
 
-    const parsed = parseJsonContent(response);
+    const { data: parsed, reason } = parseJsonContent(response);
     if (!parsed) {
       const filePaths = files.map((f) => f.filePath).join(', ');
-      logger.warn(`Empty response from ${this.model} for ${filePaths}`);
+      const detail = reason === 'malformed' ? 'malformed JSON' : 'empty response';
+      logger.warn(`${detail} from ${this.model} for ${filePaths}`);
       return {
         mutations: [],
         tokenUsage: extractTokenUsage(response),
@@ -85,7 +89,6 @@ export class AnthropicMutationProvider implements MutationProvider {
     }
 
     const tokenUsage = extractTokenUsage(response);
-    logger.addTokenUsage(tokenUsage);
 
     return {
       mutations: filterAndMapMultiFileMutations(parsed, files),

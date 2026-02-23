@@ -2,15 +2,7 @@ export interface RetryOptions {
   maxRetries: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
-  shouldRetry?: (error: unknown) => boolean;
-}
-
-function isRateLimitError(err: unknown): boolean {
-  if (err && typeof err === 'object' && 'status' in err) {
-    const status = (err as { status: number }).status;
-    return status === 429 || status === 500 || status === 502 || status === 503;
-  }
-  return false;
+  shouldRetry: (error: unknown) => boolean;
 }
 
 export async function withRetry<T>(
@@ -21,7 +13,7 @@ export async function withRetry<T>(
     maxRetries,
     baseDelayMs = 1000,
     maxDelayMs = 30000,
-    shouldRetry = isRateLimitError,
+    shouldRetry,
   } = options;
 
   let lastError: unknown;

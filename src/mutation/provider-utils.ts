@@ -25,29 +25,6 @@ export function isWithinDiffBounds(
   return false;
 }
 
-export function filterAndMapMutations(
-  parsed: MutationResponse,
-  file: ChangedFile,
-): Mutation[] {
-  const validMutations: Mutation[] = [];
-  for (const m of parsed.mutations) {
-    if (!isWithinDiffBounds(m, file)) {
-      logger.debug(`Filtered mutation outside diff bounds: lines ${m.startLine}-${m.endLine}`);
-      continue;
-    }
-    if (m.originalCode === m.mutatedCode) {
-      logger.debug(`Filtered equivalent mutation at line ${m.startLine}`);
-      continue;
-    }
-    validMutations.push({
-      ...m,
-      id: generateMutationId(file.filePath),
-      filePath: file.filePath,
-    });
-  }
-  return validMutations;
-}
-
 function normalizePath(p: string): string {
   return p.replace(/^\.\//, '').trim();
 }

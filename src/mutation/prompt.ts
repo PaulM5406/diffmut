@@ -103,30 +103,6 @@ export function buildAnnotatedContent(file: ChangedFile): string {
   return result.join('\n');
 }
 
-export function buildPrompt(
-  file: ChangedFile,
-  count: number,
-): Array<{ role: 'system' | 'user'; content: string }> {
-  const annotated = buildAnnotatedContent(file);
-
-  return [
-    { role: 'system', content: SYSTEM_PROMPT },
-    {
-      role: 'user',
-      content: `File: ${file.filePath}
-Language: ${file.language}
-
-Below is the file content with changed regions marked. Lines prefixed with [CHANGED] are within the git diff and are eligible for mutation. Lines prefixed with [CONTEXT] provide surrounding context but must NOT be mutated.
-
-\`\`\`${file.language}
-${annotated}
-\`\`\`
-
-Generate exactly ${count} mutations for the [CHANGED] lines in this file.`,
-    },
-  ];
-}
-
 export function buildMultiFilePrompt(
   files: ChangedFile[],
   totalCount: number,

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import fs from 'node:fs';
+import fs, { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import path from 'node:path';
 import { loadConfig } from '../../../src/config/loader.js';
 
@@ -86,5 +88,55 @@ describe('loadConfig', () => {
       model: 'claude-sonnet-4-5-20250514',
     });
     expect(config.model).toBe('claude-sonnet-4-5-20250514');
+  });
+});
+
+describe('config file loading', () => {
+  let tempDir: string;
+
+  const savedOpenAI = process.env.OPENAI_API_KEY;
+  const savedAnthropic = process.env.ANTHROPIC_API_KEY;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'diffmut-test-'));
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+    if (savedOpenAI) process.env.OPENAI_API_KEY = savedOpenAI;
+    else delete process.env.OPENAI_API_KEY;
+    if (savedAnthropic) process.env.ANTHROPIC_API_KEY = savedAnthropic;
+    else delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it('should load JSON config file', async () => {
+    const tempFilePath = join(tempDir, '.diffmutrc.json');
+    writeFileSync(tempFilePath, JSON.stringify({ mutations: 10, model: 'claude-sonnet-4-5-20250514' }), 'utf-8');
+
+    const config = await loadConfig({ config: tempFilePath, testCommand: 'npm test' });
+
+    expect(config.mutations).toBe(10);
+    expect(config.model).toBe('claude-sonnet-4-5-20250514');
+  });
+
+  it('should load YAML config file', async () => {
+    const tempFilePath = join(tempDir, '.diffmutrc.yml');
+    writeFileSync(tempFilePath, 'mutations: 7\ndiffBase: main\n', 'utf-8');
+
+    const config = await loadConfig({ config: tempFilePath, testCommand: 'npm test' });
+
+    expect(config.mutations).toBe(7);
+    expect(config.diffBase).toBe('main');
+  });
+
+  it('should throw on malformed JSON', async () => {
+    const tempFilePath = join(tempDir, '.diffmutrc.json');
+    writeFileSync(tempFilePath, '{ broken json', 'utf-8');
+
+    await expect(loadConfig({ config: tempFilePath, testCommand: 'npm test' })).rejects.toThrow(
+      'Failed to parse config file',
+    );
   });
 });

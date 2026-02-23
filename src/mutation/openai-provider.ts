@@ -59,7 +59,6 @@ export class OpenAIMutationProvider implements MutationProvider {
     }
 
     const tokenUsage = extractTokenUsage(completion);
-    logger.addTokenUsage(tokenUsage);
 
     return {
       mutations: filterAndMapMultiFileMutations(parsed, files),

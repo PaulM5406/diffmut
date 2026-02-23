@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v0.0.8] - 2026-02-23
+
+### Fixed
+
+- `action.yml`: `mutation-score` output is now correctly set from the report
+- `action.yml`: Shell injection via `eval` replaced with safe bash arrays and env vars
+- Per-file token usage now reports actual values instead of always zero
+- Config file parse errors now show a descriptive message instead of a raw stack trace
+- `FileManager.restoreAll` logs a warning on failure instead of silently swallowing errors
+- Anthropic provider now distinguishes "empty response" from "malformed JSON" in warnings
+
+### Changed
+
+- Extracted `createProvider`, `testFileMutations`, `classifyOutcome`, `validateOriginalCode`, `applyMutationToContent`, and `aggregateResults` from `runPipeline` for better testability
+- Deduplicated mutation details rendering in GitHub reporter
+- Shared `makeFile()` test helper across provider and prompt tests
+- `shouldRetry` is now required in `RetryOptions` (no default)
+
+### Removed
+
+- Dead `buildPrompt` single-file function (replaced by `buildMultiFilePrompt`)
+- Dead `filterAndMapMutations` single-file function (replaced by `filterAndMapMultiFileMutations`)
+- Dead `DEFAULTS` object from config (duplicated Zod schema defaults)
+- Dead `isRateLimitError` function from retry utils
+- Dead `logger.tokenUsage` accumulator and `addTokenUsage` method
+- Dead `'modified'` variant from `ChangedLine.type`
+
 ## [v0.0.5] - 2026-02-22
 
 ### Changed

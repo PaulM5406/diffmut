@@ -49,7 +49,13 @@ import { extractDiff } from '../../../src/diff/extractor.js';
 import { runPreflight } from '../../../src/runner/preflight.js';
 import { executeTests } from '../../../src/runner/executor.js';
 import { OpenAIMutationProvider } from '../../../src/mutation/openai-provider.js';
-import { runPipeline } from '../../../src/pipeline/orchestrator.js';
+import {
+  runPipeline,
+  validateOriginalCode,
+  applyMutationToContent,
+  classifyOutcome,
+  aggregateResults,
+} from '../../../src/pipeline/orchestrator.js';
 import type { MutantConfig } from '../../../src/config/schema.js';
 
 const baseConfig: MutantConfig = {
@@ -226,5 +232,119 @@ describe('runPipeline', () => {
     // Request only 3 mutations
     const result = await runPipeline({ ...baseConfig, mutations: 3, dryRun: true });
     expect(result.totalMutations).toBe(3);
+  });
+});
+
+import type { Mutation } from '../../../src/mutation/types.js';
+
+const baseMutation: Mutation = {
+  id: 'mut-1',
+  filePath: 'src/test.ts',
+  startLine: 2,
+  endLine: 2,
+  originalCode: 'line2',
+  mutatedCode: 'mutated',
+  description: 'test mutation',
+  category: 'return-value',
+};
+
+describe('validateOriginalCode', () => {
+  it('returns true when original code matches exactly', () => {
+    const content = 'line1\nline2\nline3';
+    expect(validateOriginalCode(content, baseMutation)).toBe(true);
+  });
+
+  it('returns false when original code differs', () => {
+    const content = 'line1\nDIFFERENT\nline3';
+    expect(validateOriginalCode(content, baseMutation)).toBe(false);
+  });
+
+  it('handles leading/trailing whitespace trimming', () => {
+    const content = 'line1\n  line2  \nline3';
+    const mutationWithSpaces: Mutation = { ...baseMutation, originalCode: 'line2' };
+    // The file has "  line2  " but originalCode is "line2" — trim() on both sides should match
+    expect(validateOriginalCode(content, mutationWithSpaces)).toBe(true);
+  });
+});
+
+describe('applyMutationToContent', () => {
+  it('replaces the specified lines with mutated code', () => {
+    const content = 'line1\nline2\nline3';
+    const mutation: Mutation = { ...baseMutation, startLine: 2, endLine: 2, mutatedCode: 'REPLACED' };
+    const result = applyMutationToContent(content, mutation);
+    expect(result).toBe('line1\nREPLACED\nline3');
+  });
+
+  it('handles multi-line mutations', () => {
+    const content = 'line1\nline2\nline3\nline4';
+    const mutation: Mutation = { ...baseMutation, startLine: 2, endLine: 3, mutatedCode: 'A\nB\nC' };
+    const result = applyMutationToContent(content, mutation);
+    expect(result).toBe('line1\nA\nB\nC\nline4');
+  });
+});
+
+describe('classifyOutcome', () => {
+  it("returns 'timeout' when timedOut is true", () => {
+    expect(classifyOutcome({ timedOut: true, exitCode: null, passed: false })).toBe('timeout');
+  });
+
+  it("returns 'no_coverage' when exitCode is 5", () => {
+    expect(classifyOutcome({ timedOut: false, exitCode: 5, passed: false })).toBe('no_coverage');
+  });
+
+  it("returns 'survived' when tests pass", () => {
+    expect(classifyOutcome({ timedOut: false, exitCode: 0, passed: true })).toBe('survived');
+  });
+
+  it("returns 'killed' when tests fail", () => {
+    expect(classifyOutcome({ timedOut: false, exitCode: 1, passed: false })).toBe('killed');
+  });
+});
+
+describe('aggregateResults', () => {
+  const tokenUsage = { promptTokens: 10, completionTokens: 5, totalTokens: 15 };
+
+  function makeResult(outcome: string): import('../../../src/mutation/types.js').MutationTestResult {
+    return {
+      mutation: baseMutation,
+      outcome: outcome as import('../../../src/mutation/types.js').MutationOutcome,
+      durationMs: 0,
+    };
+  }
+
+  it('counts outcomes correctly with mixed results', () => {
+    const fileResults = [
+      {
+        filePath: 'src/a.ts',
+        tokenUsage,
+        results: [makeResult('killed'), makeResult('survived'), makeResult('no_coverage'), makeResult('timeout'), makeResult('error')],
+      },
+    ];
+    const result = aggregateResults(fileResults, tokenUsage, Date.now());
+    expect(result.killed).toBe(1);
+    expect(result.survived).toBe(1);
+    expect(result.noCoverage).toBe(1);
+    expect(result.timedOut).toBe(1);
+    expect(result.errors).toBe(1);
+    expect(result.totalMutations).toBe(5);
+  });
+
+  it('calculates mutation score correctly', () => {
+    // 2 killed, 1 survived, 1 no_coverage — denominator = 4, score = 50%
+    const fileResults = [
+      {
+        filePath: 'src/a.ts',
+        tokenUsage,
+        results: [makeResult('killed'), makeResult('killed'), makeResult('survived'), makeResult('no_coverage')],
+      },
+    ];
+    const result = aggregateResults(fileResults, tokenUsage, Date.now());
+    expect(result.mutationScore).toBeCloseTo(50);
+  });
+
+  it('returns 100 score for empty results', () => {
+    const result = aggregateResults([], tokenUsage, Date.now());
+    expect(result.mutationScore).toBe(100);
+    expect(result.totalMutations).toBe(0);
   });
 });

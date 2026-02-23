@@ -4,20 +4,22 @@ import YAML from 'yaml';
 import { MutantConfigSchema, resolveProvider, type MutantConfig } from './schema.js';
 import { CONFIG_FILE_NAMES } from './defaults.js';
 
-interface CLIOptions {
-  diffBase?: string;
+export interface CLIOptions {
   testCommand: string;
+  config?: string;
+  // String versions of numeric fields (from commander)
   mutations?: string;
+  timeout?: string;
+  // Direct overrides matching schema fields
+  diffBase?: string;
   model?: string;
   provider?: string;
-  timeout?: string;
   output?: string;
   include?: string[];
   exclude?: string[];
   excludeTests?: boolean;
   failOnSurvived?: boolean;
   dryRun?: boolean;
-  config?: string;
 }
 
 function findConfigFile(startDir: string): string | null {
@@ -38,10 +40,15 @@ function findConfigFile(startDir: string): string | null {
 
 function loadConfigFile(filePath: string): Record<string, unknown> {
   const content = fs.readFileSync(filePath, 'utf-8');
-  if (filePath.endsWith('.json')) {
-    return JSON.parse(content);
+  try {
+    if (filePath.endsWith('.json')) {
+      return JSON.parse(content);
+    }
+    return YAML.parse(content) ?? {};
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse config file ${filePath}: ${message}`, { cause: err });
   }
-  return YAML.parse(content) ?? {};
 }
 
 export async function loadConfig(cliOpts: CLIOptions): Promise<MutantConfig> {

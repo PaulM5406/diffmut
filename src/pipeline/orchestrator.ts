@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { resolveProvider, type MutantConfig } from '../config/schema.js';
 import { extractDiff } from '../diff/extractor.js';
+import type { ChangedFile } from '../diff/types.js';
 import { AnthropicMutationProvider } from '../mutation/anthropic-provider.js';
 import { OpenAIMutationProvider } from '../mutation/openai-provider.js';
 import type { MutationProvider } from '../mutation/provider.js';
@@ -22,7 +23,6 @@ function emptyTokenUsage(): TokenUsage {
   return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 }
 
-
 function emptyResult(startTime: number): PipelineResult {
   return {
     totalMutations: 0,
@@ -38,7 +38,14 @@ function emptyResult(startTime: number): PipelineResult {
   };
 }
 
-function validateOriginalCode(
+export function createProvider(config: MutantConfig): MutationProvider {
+  const providerName = resolveProvider(config);
+  return providerName === 'anthropic'
+    ? new AnthropicMutationProvider(config.model)
+    : new OpenAIMutationProvider(config.model);
+}
+
+export function validateOriginalCode(
   fileContent: string,
   mutation: Mutation,
 ): boolean {
@@ -48,7 +55,7 @@ function validateOriginalCode(
   return actual.trim() === mutation.originalCode.trim();
 }
 
-function applyMutationToContent(content: string, mutation: Mutation): string {
+export function applyMutationToContent(content: string, mutation: Mutation): string {
   const lines = content.split('\n');
   const before = lines.slice(0, mutation.startLine - 1);
   const after = lines.slice(mutation.endLine);
@@ -56,7 +63,14 @@ function applyMutationToContent(content: string, mutation: Mutation): string {
   return [...before, ...mutatedLines, ...after].join('\n');
 }
 
-function aggregateResults(
+export function classifyOutcome(testResult: { timedOut: boolean; exitCode: number | null; passed: boolean }): MutationOutcome {
+  if (testResult.timedOut) return 'timeout';
+  if (testResult.exitCode === 5) return 'no_coverage';
+  if (testResult.passed) return 'survived';
+  return 'killed';
+}
+
+export function aggregateResults(
   fileResults: FileResult[],
   totalTokenUsage: TokenUsage,
   startTime: number,
@@ -107,6 +121,74 @@ function aggregateResults(
   };
 }
 
+export async function testFileMutations(
+  file: ChangedFile,
+  fileMutations: Mutation[],
+  config: MutantConfig,
+  fileManager: FileManager,
+  root: string,
+  tokenUsage: TokenUsage,
+): Promise<FileResult> {
+  const { filePath } = file;
+
+  if (config.dryRun) {
+    return {
+      filePath,
+      results: fileMutations.map((m) => ({
+        mutation: m,
+        outcome: 'survived' as const,
+        durationMs: 0,
+      })),
+      tokenUsage,
+    };
+  }
+
+  const results: MutationTestResult[] = [];
+  const absPath = path.join(root, filePath);
+  fileManager.backup(absPath);
+
+  for (const mutation of fileMutations) {
+    if (!validateOriginalCode(file.currentContent, mutation)) {
+      logger.warn(`  Skipping ${mutation.id}: originalCode mismatch`);
+      results.push({
+        mutation,
+        outcome: 'error',
+        durationMs: 0,
+        testOutput: 'Original code mismatch - LLM hallucinated the original code',
+      });
+      continue;
+    }
+
+    try {
+      const mutatedContent = applyMutationToContent(file.currentContent, mutation);
+      fileManager.applyMutation(absPath, mutatedContent);
+
+      const testResult = await executeTests(config.testCommand, config.timeout);
+      const outcome = classifyOutcome(testResult);
+
+      results.push({
+        mutation,
+        outcome,
+        durationMs: testResult.durationMs,
+        testOutput: outcome === 'survived' ? testResult.stdout : undefined,
+      });
+
+      logger.info(`  ${mutation.id}: ${outcome} (${testResult.durationMs}ms)`);
+    } catch (err) {
+      results.push({
+        mutation,
+        outcome: 'error',
+        durationMs: 0,
+        testOutput: String(err),
+      });
+    } finally {
+      fileManager.restore(absPath);
+    }
+  }
+
+  return { filePath, results, tokenUsage };
+}
+
 export async function runPipeline(config: MutantConfig): Promise<PipelineResult> {
   const startTime = Date.now();
   const root = gitRoot();
@@ -131,11 +213,7 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
     }
 
     // Step 3: Create mutation provider
-    const providerName = resolveProvider(config);
-    const provider: MutationProvider =
-      providerName === 'anthropic'
-        ? new AnthropicMutationProvider(config.model)
-        : new OpenAIMutationProvider(config.model);
+    const provider = createProvider(config);
 
     // Step 4: Generate mutations for ALL files in a single LLM call
     logger.info(`Generating ${config.mutations} mutation(s) across all files...`);
@@ -158,80 +236,22 @@ export async function runPipeline(config: MutantConfig): Promise<PipelineResult>
 
     // Step 6: Test mutations grouped by file
     const fileResults: FileResult[] = [];
-    const tokenPerFile = emptyTokenUsage();
+    const fileCount = mutationsByFile.size;
+    const tokenPerFile = fileCount > 0
+      ? {
+          promptTokens: Math.round(genResult.tokenUsage.promptTokens / fileCount),
+          completionTokens: Math.round(genResult.tokenUsage.completionTokens / fileCount),
+          totalTokens: Math.round(genResult.tokenUsage.totalTokens / fileCount),
+        }
+      : emptyTokenUsage();
 
     for (const [filePath, fileMutations] of mutationsByFile) {
       const file = fileByPath.get(filePath);
       if (!file) continue;
 
       logger.info(`Processing ${filePath} (${fileMutations.length} mutations)...`);
-
-      if (config.dryRun) {
-        fileResults.push({
-          filePath,
-          results: fileMutations.map((m) => ({
-            mutation: m,
-            outcome: 'survived' as const,
-            durationMs: 0,
-          })),
-          tokenUsage: tokenPerFile,
-        });
-        continue;
-      }
-
-      const results: MutationTestResult[] = [];
-      const absPath = path.join(root, filePath);
-      fileManager.backup(absPath);
-
-      for (const mutation of fileMutations) {
-        if (!validateOriginalCode(file.currentContent, mutation)) {
-          logger.warn(`  Skipping ${mutation.id}: originalCode mismatch`);
-          results.push({
-            mutation,
-            outcome: 'error',
-            durationMs: 0,
-            testOutput: 'Original code mismatch - LLM hallucinated the original code',
-          });
-          continue;
-        }
-
-        try {
-          const mutatedContent = applyMutationToContent(file.currentContent, mutation);
-          fileManager.applyMutation(absPath, mutatedContent);
-
-          const testResult = await executeTests(config.testCommand, config.timeout);
-
-          let outcome: MutationOutcome;
-          if (testResult.timedOut) outcome = 'timeout';
-          else if (testResult.exitCode === 5) outcome = 'no_coverage';
-          else if (testResult.passed) outcome = 'survived';
-          else outcome = 'killed';
-
-          results.push({
-            mutation,
-            outcome,
-            durationMs: testResult.durationMs,
-            testOutput: outcome === 'survived' ? testResult.stdout : undefined,
-          });
-
-          logger.info(`  ${mutation.id}: ${outcome} (${testResult.durationMs}ms)`);
-        } catch (err) {
-          results.push({
-            mutation,
-            outcome: 'error',
-            durationMs: 0,
-            testOutput: String(err),
-          });
-        } finally {
-          fileManager.restore(absPath);
-        }
-      }
-
-      fileResults.push({
-        filePath,
-        results,
-        tokenUsage: tokenPerFile,
-      });
+      const fileResult = await testFileMutations(file, fileMutations, config, fileManager, root, tokenPerFile);
+      fileResults.push(fileResult);
     }
 
     return aggregateResults(fileResults, genResult.tokenUsage, startTime);

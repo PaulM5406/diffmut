@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { logger } from '../utils/logger.js';
 
 export class FileManager {
   private backups = new Map<string, string>();
@@ -27,8 +28,9 @@ export class FileManager {
     for (const [filePath, content] of this.backups) {
       try {
         fs.writeFileSync(filePath, content, 'utf-8');
-      } catch {
-        // Best-effort restore
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn(`Failed to restore ${filePath}: ${message}`);
       }
     }
     this.backups.clear();

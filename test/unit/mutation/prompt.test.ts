@@ -1,25 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnnotatedContent, buildPrompt, buildMultiFilePrompt } from '../../../src/mutation/prompt.js';
-import type { ChangedFile } from '../../../src/diff/types.js';
-
-function makeFile(overrides: Partial<ChangedFile> = {}): ChangedFile {
-  return {
-    filePath: 'src/test.ts',
-    currentContent: 'line1\nline2\nline3\nline4\nline5',
-    hunks: [
-      {
-        startLine: 2,
-        lineCount: 2,
-        lines: [
-          { lineNumber: 2, content: 'line2', type: 'added' },
-          { lineNumber: 3, content: 'line3', type: 'added' },
-        ],
-      },
-    ],
-    language: 'typescript',
-    ...overrides,
-  };
-}
+import { buildAnnotatedContent, buildMultiFilePrompt } from '../../../src/mutation/prompt.js';
+import { makeFile } from '../../helpers.js';
 
 describe('buildAnnotatedContent', () => {
   it('should mark changed lines with [CHANGED] and others with [CONTEXT]', () => {
@@ -44,40 +25,26 @@ describe('buildAnnotatedContent', () => {
     expect(result).toContain('   2');
     expect(result).toContain('   5');
   });
-});
 
-describe('buildPrompt', () => {
-  it('should return system and user messages', () => {
-    const file = makeFile();
-    const messages = buildPrompt(file, 3);
+  it('truncates large files by showing only hunks with context and omission separators', () => {
+    const content = Array.from({ length: 600 }, (_, i) => `line${i + 1}`).join('\n');
+    const file = makeFile({
+      currentContent: content,
+      hunks: [
+        {
+          startLine: 300,
+          lineCount: 1,
+          lines: [{ lineNumber: 300, content: 'line300', type: 'added' }],
+        },
+      ],
+    });
+    const result = buildAnnotatedContent(file);
 
-    expect(messages).toHaveLength(2);
-    expect(messages[0].role).toBe('system');
-    expect(messages[1].role).toBe('user');
-  });
-
-  it('should include file path and language in user message', () => {
-    const file = makeFile();
-    const messages = buildPrompt(file, 3);
-
-    expect(messages[1].content).toContain('src/test.ts');
-    expect(messages[1].content).toContain('typescript');
-  });
-
-  it('should include mutation count in user message', () => {
-    const file = makeFile();
-    const messages = buildPrompt(file, 7);
-
-    expect(messages[1].content).toContain('7 mutations');
-  });
-
-  it('should include mutation categories in system prompt', () => {
-    const file = makeFile();
-    const messages = buildPrompt(file, 3);
-
-    expect(messages[0].content).toContain('boundary-condition');
-    expect(messages[0].content).toContain('logical-operator');
-    expect(messages[0].content).toContain('null-safety');
+    expect(result).toContain('[CHANGED]');
+    expect(result).toContain('lines omitted');
+    // A full render of 600 lines would include line 400+ as [CONTEXT]; the truncated
+    // output should not contain every line number up to 600.
+    expect(result).not.toContain('  600 [CONTEXT]');
   });
 });
 
